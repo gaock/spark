@@ -348,6 +348,12 @@ private[spark] class BlockManager(
    */
   override def getBlockData(blockId: BlockId): ManagedBuffer = {
     if (blockId.isShuffle) {
+      // It could be added conf
+      val isUseRiffle = SparkEnv.get.conf.getBoolean("spark.conf.isUseRiffle", false)
+      if (isUseRiffle) {
+        return shuffleManager.shuffleBlockResolver
+          .getRiffleBlockData(blockId.asInstanceOf[ShuffleBlockId])
+      }
       shuffleManager.shuffleBlockResolver.getBlockData(blockId.asInstanceOf[ShuffleBlockId])
     } else {
       getLocalBytes(blockId) match {
@@ -814,6 +820,11 @@ private[spark] class BlockManager(
     val syncWrites = conf.getBoolean("spark.shuffle.sync", false)
     new DiskBlockObjectWriter(file, serializerManager, serializerInstance, bufferSize,
       syncWrites, writeMetrics, blockId)
+  }
+  override def getRiffleBlockData(blockId: BlockId, offset: Long, size: Long):
+  ManagedBuffer = {
+    shuffleManager.shuffleBlockResolver.
+      getRiffleBlockData(blockId.asInstanceOf[ShuffleBlockId], offset, size)
   }
 
   /**

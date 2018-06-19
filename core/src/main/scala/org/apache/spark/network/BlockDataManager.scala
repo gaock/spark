@@ -30,7 +30,7 @@ trait BlockDataManager {
    * cannot be read successfully.
    */
   def getBlockData(blockId: BlockId): ManagedBuffer
-
+  def getRiffleBlockData(blockId: BlockId, offset: Long, size: Long): ManagedBuffer
   /**
    * Put the block locally, using the given storage level.
    *

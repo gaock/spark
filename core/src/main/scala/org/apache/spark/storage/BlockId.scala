@@ -59,6 +59,10 @@ case class RDDBlockId(rddId: Int, splitIndex: Int) extends BlockId {
 @DeveloperApi
 case class ShuffleBlockId(shuffleId: Int, mapId: Int, reduceId: Int) extends BlockId {
   override def name: String = "shuffle_" + shuffleId + "_" + mapId + "_" + reduceId
+  var flag : Boolean = false
+  def change(falg : Boolean) : Unit = {
+    this.flag = flag
+  }
 }
 
 @DeveloperApi

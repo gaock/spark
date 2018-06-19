@@ -36,5 +36,8 @@ trait ShuffleBlockResolver {
    */
   def getBlockData(blockId: ShuffleBlockId): ManagedBuffer
 
+  def getRiffleBlockData(blockId: ShuffleBlockId, offset: Long, size: Long) : ManagedBuffer
+  def getRiffleBlockData(blockId: ShuffleBlockId) : ManagedBuffer
+  def getSegmentIndex (blockId: ShuffleBlockId): Array[Long]
   def stop(): Unit
 }

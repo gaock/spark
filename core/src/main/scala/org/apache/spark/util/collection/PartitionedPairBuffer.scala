@@ -52,6 +52,9 @@ private[spark] class PartitionedPairBuffer[K, V](initialCapacity: Int = 64)
     curSize += 1
     afterUpdate()
   }
+  def riffleSeparation(partition: Int = 0, key: K): Unit = {
+    data
+  }
 
   /** Double the size of the array because we've reached capacity */
   private def growArray(): Unit = {

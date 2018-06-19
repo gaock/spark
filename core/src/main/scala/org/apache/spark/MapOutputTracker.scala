@@ -698,11 +698,36 @@ private[spark] object MapOutputTracker extends Logging {
       } else {
         for (part <- startPartition until endPartition) {
           splitsByAddress.getOrElseUpdate(status.location, ArrayBuffer()) +=
-            ((ShuffleBlockId(shuffleId, mapId, part), status.getSizeForBlock(part)))
+            ((ShuffleBlockId(shuffleId, mapId, part), tt(true, status, part)))
         }
       }
     }
-
+    splitsByAddress.toSeq
+  }
+  // check use riffle or not use riffle and it could be get from conf.get("spark.conf.isUseRiffle")
+  def tt(isUseRiffle: Boolean, status: MapStatus, part: Int): Long = {
+    if (isUseRiffle) return status.getSizeForRiffleBlock(part)
+    else return status.getSizeForBlock(part)
+  }
+  private def convertRiffleMapStatuses(
+      shuffleId: Int,
+      startPartition: Int,
+      endPartition: Int,
+      statuses: Array[MapStatus]): Seq[(BlockManagerId, Seq[(BlockId, Long)])] = {
+    assert (statuses != null)
+    val splitsByAddress = new HashMap[BlockManagerId, ArrayBuffer[(BlockId, Long)]]
+    for ((status, mapId) <- statuses.zipWithIndex) {
+      if (status == null) {
+        val errorMessage = s"Missing an output location for shuffle $shuffleId"
+        logError(errorMessage)
+        throw new MetadataFetchFailedException(shuffleId, startPartition, errorMessage)
+      } else {
+        for (part <- startPartition until endPartition) {
+          splitsByAddress.getOrElseUpdate(status.location, ArrayBuffer()) +=
+            ((ShuffleBlockId(shuffleId, mapId, part), status.getSizeForRiffleBlock(part)))
+        }
+      }
+    }
     splitsByAddress.toSeq
   }
 }

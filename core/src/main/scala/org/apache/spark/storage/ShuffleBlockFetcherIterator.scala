@@ -332,6 +332,7 @@ final class ShuffleBlockFetcherIterator(
     }
   }
 
+
   private[this] def initialize(): Unit = {
     // Add a task completion callback (called in both success case and failure case) to cleanup.
     context.addTaskCompletionListener(_ => cleanup())
