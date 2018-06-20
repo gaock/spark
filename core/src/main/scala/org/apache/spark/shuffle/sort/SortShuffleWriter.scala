@@ -140,7 +140,7 @@ private[spark] class SortShuffleWriter[K, V, C](
       logInfo("*************get BlockInfo***********")
       var success = false
       // It may reduce efficient since this code will search all blocks
-      val shuffleBlockIds = blockManager.getMatchingBlockIds(_.isShuffle).filter(_.asInstanceOf[ShuffleBlockId].flag)
+      val shuffleBlockIds = blockManager.getMatchingBlockIds(_.isShuffle).filter(!_.asInstanceOf[ShuffleBlockId].flag)
       if (shuffleBlockIds.length > riffleThreshold) {
         logInfo("start merge riffle blocks, the blocks num has been over the riffle threshold")
         // Change blocks' flag in case other tasks change it.
