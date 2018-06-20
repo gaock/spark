@@ -71,6 +71,7 @@ private[spark] class SortShuffleWriter[K, V, C](
 
   /** Write a bunch of records to this task's output */
   override def write(records: Iterator[Product2[K, V]]): Unit = {
+    logInfo(s"isUseRiffle:$isUseRiffle **** test is use riffle ***")
     sorter = if (dep.mapSideCombine) {
       require(dep.aggregator.isDefined, "Map-side combine without Aggregator specified!")
       new ExternalSorter[K, V, C](
@@ -99,7 +100,7 @@ private[spark] class SortShuffleWriter[K, V, C](
         logError(s"Error while deleting temp file ${tmp.getAbsolutePath}")
       }
     }
-
+    logInfo(s"isUseRiffle:$isUseRiffle **** test is use riffle ***")
     if (isUseRiffle) {
       logInfo("We Use Riffle to Merge Files!")
       rifflePartitionLengths = new Array[Long](partitionLengths.length)
