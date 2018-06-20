@@ -56,6 +56,8 @@ private[spark] class SortShuffleWriter[K, V, C](
   private var readSegmentInfo = Map[ShuffleBlockId, (Int, Int)]()
   private var partitionLengths = new Array[Long](1)
   private var rifflePartitionLengths = new Array[Long](2)
+
+  private var mapOutputTracker: MapOutputTracker = SparkEnv.get.mapOutputTracker
   private val conf = SparkEnv.get.conf
   private val isUseRiffle = conf.getBoolean("spark.conf.isUseRiffle", false)
   private val readSize = conf.getInt("spark.conf.readSize", 1024*1024*1)
@@ -138,8 +140,7 @@ private[spark] class SortShuffleWriter[K, V, C](
       logInfo("*************get BlockInfo***********")
       var success = false
       // It may reduce efficient since this code will search all blocks
-      val shuffleBlockIds = blockManager.getMatchingBlockIds(
-        blockId => ((blockId.isShuffle && !blockId.asInstanceOf[ShuffleBlockId].flag)))
+      val shuffleBlockIds = blockManager.getMatchingBlockIds(_.isShuffle).filter(_.asInstanceOf[ShuffleBlockId].flag)
       if (shuffleBlockIds.length > riffleThreshold) {
         logInfo("start merge riffle blocks, the blocks num has been over the riffle threshold")
         // Change blocks' flag in case other tasks change it.
