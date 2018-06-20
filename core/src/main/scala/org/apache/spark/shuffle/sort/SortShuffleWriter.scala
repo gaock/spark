@@ -29,10 +29,10 @@ import org.apache.spark.util.collection.ExternalSorter
 
 
 private[spark] class SortShuffleWriter[K, V, C](
-                                                 shuffleBlockResolver: IndexShuffleBlockResolver,
-                                                 handle: BaseShuffleHandle[K, V, C],
-                                                 mapId: Int,
-                                                 context: TaskContext)
+   shuffleBlockResolver: IndexShuffleBlockResolver,
+   handle: BaseShuffleHandle[K, V, C],
+   mapId: Int,
+   context: TaskContext)
   extends ShuffleWriter[K, V] with Logging {
 
   private val dep = handle.dependency
