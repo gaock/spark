@@ -150,8 +150,8 @@ private[spark] class SortShuffleWriter[K, V, C](
 //        }
 //      }
 //    }
-
-    blockManager.synchronized{
+    while (blockManager.status) {
+      blockManager.occupy
       var success = false
       val b1 = blockManager.getMatchingBlockIds(block => true)
       val b1length = b1.length
@@ -160,9 +160,11 @@ private[spark] class SortShuffleWriter[K, V, C](
         logInfo(s"blockId name---->$name && taskId=$mapId && total num = $b1length")
       }
       val shuffleBlockIds = b1.filter(blockId => {(
-        blockId.isShuffleIndex &&
-        blockId.asInstanceOf[ShuffleIndexBlockId].shuffleId == dep.shuffleId &&
-        !blockId.asInstanceOf[ShuffleIndexBlockId].flag)})
+          blockId.isShuffleIndex &&
+          blockId.asInstanceOf[ShuffleIndexBlockId].shuffleId == dep.shuffleId &&
+          blockId.asInstanceOf[ShuffleIndexBlockId].reduceId  == 0  &&
+          blockId.asInstanceOf[ShuffleIndexBlockId].getStatus &&
+          !blockId.asInstanceOf[ShuffleIndexBlockId].flag)})
       val shuffleLength = shuffleBlockIds.length
       for (i <- shuffleBlockIds) {
         val name = i.name
@@ -185,15 +187,19 @@ private[spark] class SortShuffleWriter[K, V, C](
           val ss = riffleBlocks(i).name
           logInfo(s"************fetch block id = $ss**************")
         }
+        blockManager.release
         return (success, riffleBlocks.toSeq)
       } else {
         logInfo(s"waiting enough block && " +
           s"release the blockManager lock && " +
           s"the block total num = $b1" +
           s"the shuffle block num = $shuffleLength")
+        blockManager.release
         return (success, null.asInstanceOf[Seq[ShuffleBlockId]])
       }
     }
+    // It will never arrive this code
+    (false, null.asInstanceOf[Seq[ShuffleBlockId]])
   }
 
   def getRiffleInfo(ids: Seq[ShuffleBlockId]) :

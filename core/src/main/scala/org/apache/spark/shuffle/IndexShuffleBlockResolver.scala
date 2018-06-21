@@ -160,6 +160,7 @@ private[spark] class IndexShuffleBlockResolver(
         }
       } {
         out.close()
+        ShuffleIndexBlockId(shuffleId, mapId, NOOP_REDUCE_ID).successFinish
       }
 
       val dataFile = getDataFile(shuffleId, mapId)

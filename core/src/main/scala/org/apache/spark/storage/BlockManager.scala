@@ -408,6 +408,10 @@ private[spark] class BlockManager(
       .toArray
       .toSeq
   }
+  private var flagSys : Boolean = true
+  def occupy : Unit = flagSys = false
+  def release : Unit = flagSys = true
+  def status : Boolean = flagSys
 
   /**
    * Tell the master about the current storage status of a block. This will send a block update

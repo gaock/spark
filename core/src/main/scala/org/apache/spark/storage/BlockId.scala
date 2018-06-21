@@ -76,9 +76,12 @@ case class ShuffleDataBlockId(shuffleId: Int, mapId: Int, reduceId: Int) extends
 case class ShuffleIndexBlockId(shuffleId: Int, mapId: Int, reduceId: Int) extends BlockId {
   override def name: String = "shuffle_" + shuffleId + "_" + mapId + "_" + reduceId + ".index"
   var flag : Boolean = false
+  var finish : Boolean = false
   def change(newFlag : Boolean) : Unit = {this.flag = newFlag}
   def getShuffleId : Int = shuffleId
   def getMapId : Int = mapId
+  def getStatus : Boolean = finish
+  def successFinish : Unit = this.finish = true
 }
 
 @DeveloperApi
