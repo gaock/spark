@@ -161,13 +161,12 @@ private[spark] class SortShuffleWriter[K, V, C](
             val name = i.name
             logInfo(s"blockId name---->$name && taskId=$mapId && total num = $b1length")
           }
-          val shuffleBlockIds = b1.filter(blockId => {
-            (
+          val shuffleBlockIds = b1.filter(blockId => {(
               blockId.isShuffleIndex &&
-                blockId.asInstanceOf[ShuffleIndexBlockId].shuffleId == dep.shuffleId &&
-                blockId.asInstanceOf[ShuffleIndexBlockId].reduceId == 0 &&
-                blockId.asInstanceOf[ShuffleIndexBlockId].getStatus &&
-                !blockId.asInstanceOf[ShuffleIndexBlockId].flag)
+              blockId.asInstanceOf[ShuffleIndexBlockId].shuffleId == dep.shuffleId &&
+              blockId.asInstanceOf[ShuffleIndexBlockId].reduceId == 0 &&
+              blockId.asInstanceOf[ShuffleIndexBlockId].getStatus &&
+              !blockId.asInstanceOf[ShuffleIndexBlockId].flag)
           })
           val shuffleLength = shuffleBlockIds.length
           for (i <- shuffleBlockIds) {
