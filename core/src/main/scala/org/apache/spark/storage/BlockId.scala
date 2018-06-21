@@ -40,6 +40,8 @@ sealed abstract class BlockId {
   def isRDD: Boolean = isInstanceOf[RDDBlockId]
   def isShuffle: Boolean = isInstanceOf[ShuffleBlockId]
   def isBroadcast: Boolean = isInstanceOf[BroadcastBlockId]
+  def isShuffleData: Boolean = isInstanceOf[ShuffleDataBlockId]
+  def isShuffleIndex: Boolean = isInstanceOf[ShuffleIndexBlockId]
 
   override def toString: String = name
   override def hashCode: Int = name.hashCode
@@ -73,6 +75,10 @@ case class ShuffleDataBlockId(shuffleId: Int, mapId: Int, reduceId: Int) extends
 @DeveloperApi
 case class ShuffleIndexBlockId(shuffleId: Int, mapId: Int, reduceId: Int) extends BlockId {
   override def name: String = "shuffle_" + shuffleId + "_" + mapId + "_" + reduceId + ".index"
+  var flag : Boolean = false
+  def change(newFlag : Boolean) : Unit = {this.flag = newFlag}
+  def getShuffleId : Int = shuffleId
+  def getMapId : Int = mapId
 }
 
 @DeveloperApi
