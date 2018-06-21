@@ -180,8 +180,10 @@ private[spark] class SortShuffleWriter[K, V, C](
         val riffleBlocks = new Array[ShuffleBlockId](shuffleBlockIds.length)
         val it = shuffleBlockIds.iterator
         for (i <- shuffleBlockIds.indices) {
-          val mapId = it.next().asInstanceOf[ShuffleIndexBlockId].getMapId
-          riffleBlocks(i) = new ShuffleBlockId(dep.shuffleId, mapId, 0)
+          val mapIdRiffle = it.next().asInstanceOf[ShuffleIndexBlockId].getMapId
+          riffleBlocks(i) = ShuffleBlockId(dep.shuffleId, mapIdRiffle, 0)
+          val ss = riffleBlocks(i).name
+          logInfo(s"************fetch block id = $ss**************")
         }
         return (success, riffleBlocks.toSeq)
       } else {
