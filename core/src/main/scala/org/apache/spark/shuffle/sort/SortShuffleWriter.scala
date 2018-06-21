@@ -159,7 +159,7 @@ private[spark] class SortShuffleWriter[K, V, C](
         val name = i.name
         logInfo(s"blockId name---->$name && taskId=$mapId && total num = $b1length")
       }
-      val shuffleBlockIds = b1.filter(ff(_))
+      val shuffleBlockIds = b1.filter(block => ff(block))
       def ff(blockId : BlockId) : Boolean = {
         if (blockId.isShuffleIndex &&
             blockId.asInstanceOf[ShuffleIndexBlockId].shuffleId == dep.shuffleId &&
