@@ -136,7 +136,7 @@ private[spark] class SortShuffleWriter[K, V, C](
 
   def isRiffleMerge(): (Boolean, Seq[ShuffleBlockId]) = {
 //    mapOutputTracker.synchronized {
-//      val status = mapOutputTracker.mapStatuses
+//      val status = mapOutputTracker.getMapStatuses()
 //      if (status.contains(dep.shuffleId)) {
 //        val mapStatus = status(dep.shuffleId)
 //        val length = mapStatus.length
