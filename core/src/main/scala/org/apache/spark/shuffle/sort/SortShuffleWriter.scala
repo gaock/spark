@@ -153,7 +153,12 @@ private[spark] class SortShuffleWriter[K, V, C](
 
     blockManager.synchronized{
       var success = false
-      val b1 = blockManager.getMatchingBlockIds(block => true).length
+      val b1 = blockManager.getMatchingBlockIds(block => true)
+      val b1length = b1.length
+      for (i <- b1) {
+        val name = i.name
+        logInfo(s"blockId name---->$name && taskId=$mapId && total num = $b1length")
+      }
       val b2 = blockManager.getMatchingBlockIds(_.isShuffle).length
       val b3 = blockManager.getMatchingBlockIds(_.isShuffle)
         .filter(!_.asInstanceOf[ShuffleBlockId].flag).length
