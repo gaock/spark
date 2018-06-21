@@ -319,8 +319,13 @@ private[spark] class IndexShuffleBlockResolver(
         val offset = in.readLong()
         segmentLength  += offset
         i += 1
+        val name = blockId.name
+        logInfo(s"read segment length $offset--segmentId=$i---index=$name-----")
       }
-    } finally {
+    } catch {
+      case e : EOFException => in.close(); logInfo(s"read to the last index")
+    }
+    finally {
       in.close()
     }
     return segmentLength.toArray
