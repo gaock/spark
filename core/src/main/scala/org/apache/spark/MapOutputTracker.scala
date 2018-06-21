@@ -81,7 +81,7 @@ private[spark] abstract class MapOutputTracker(conf: SparkConf) extends Logging 
    * Note: because mapStatuses is accessed concurrently, subclasses should make sure it's a
    * thread-safe map.
    */
-  protected val mapStatuses: Map[Int, Array[MapStatus]]
+   val mapStatuses: Map[Int, Array[MapStatus]]
 
   /**
    * Incremented every time a fetch fails so that client nodes know to clear

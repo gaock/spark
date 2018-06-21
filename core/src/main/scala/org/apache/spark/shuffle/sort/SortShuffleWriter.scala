@@ -73,7 +73,6 @@ private[spark] class SortShuffleWriter[K, V, C](
 
   /** Write a bunch of records to this task's output */
   override def write(records: Iterator[Product2[K, V]]): Unit = {
-    logInfo(s"isUseRiffle:$isUseRiffle **** test is use riffle ***")
     sorter = if (dep.mapSideCombine) {
       require(dep.aggregator.isDefined, "Map-side combine without Aggregator specified!")
       new ExternalSorter[K, V, C](
@@ -102,13 +101,13 @@ private[spark] class SortShuffleWriter[K, V, C](
         logError(s"Error while deleting temp file ${tmp.getAbsolutePath}")
       }
     }
-    logInfo(s"isUseRiffle:$isUseRiffle **** test is use riffle ***")
+    logInfo(s"isUseRiffle:$isUseRiffle **** test is use riffle ***taskId=$mapId")
     if (isUseRiffle) {
-      logInfo("We Use Riffle to Merge Files!")
+      logInfo(s"We Use Riffle to Merge Files!****taskId=$mapId")
       rifflePartitionLengths = new Array[Long](partitionLengths.length)
       val res = isRiffleMerge()
       if (res._1) {
-        logInfo("We'll start merge files")
+        logInfo(s"We'll start merge files****taskId=$mapId")
         getRiffleInfo(res._2)
         //  Use only one writer to write this riffle file
         // (shuffleId,mapId,reduceId(100).riffleData/riffleIndex)
@@ -130,19 +129,39 @@ private[spark] class SortShuffleWriter[K, V, C](
         mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths,
           rifflePartitionLengths, res._2.toArray)
       } else {
-        logInfo("waiting threshold files")
+        logInfo(s"waiting threshold files***taskId=$mapId")
       }
     }
   }
 
   def isRiffleMerge(): (Boolean, Seq[ShuffleBlockId]) = {
+//    mapOutputTracker.synchronized {
+//      val status = mapOutputTracker.mapStatuses
+//      if (status.contains(dep.shuffleId)) {
+//        val mapStatus = status(dep.shuffleId)
+//        val length = mapStatus.length
+//        val shuffleId = dep.shuffleId
+//        logInfo(s"mapStatus length $length*****shuffle-$shuffleId*****task-$mapId")
+//        if (length < riffleThreshold) {
+//          for (m <- mapStatus) {
+//            m.
+//          }
+//          return (true, for ())
+//        }
+//      }
+//    }
+
     blockManager.synchronized{
-      logInfo("*************get BlockInfo***********")
       var success = false
+      val b1 = blockManager.getMatchingBlockIds(block => true).length
+      val b2 = blockManager.getMatchingBlockIds(_.isShuffle).length
+      val b3 = blockManager.getMatchingBlockIds(_.isShuffle)
+        .filter(!_.asInstanceOf[ShuffleBlockId].flag).length
       // It may reduce efficient since this code will search all blocks
       val shuffleBlockIds = blockManager.getMatchingBlockIds(_.isShuffle).filter(!_.asInstanceOf[ShuffleBlockId].flag)
       if (shuffleBlockIds.length > riffleThreshold) {
-        logInfo("start merge riffle blocks, the blocks num has been over the riffle threshold")
+        logInfo(s"start merge riffle blocks, " +
+          s"the blocks num has been over the riffle threshold!!!taskId=$mapId")
         // Change blocks' flag in case other tasks change it.
         for (id <- shuffleBlockIds) {
           id.asInstanceOf[ShuffleBlockId].flag = true
@@ -155,7 +174,11 @@ private[spark] class SortShuffleWriter[K, V, C](
         }
         return (success, riffleBlocks)
       } else {
-        logInfo("waiting enough block && release the blockManager lock")
+        logInfo(s"waiting enough block && " +
+          s"release the blockManager lock && " +
+          s"the block total num = $b1" +
+          s"the shuffle block num = $b2" +
+          s"the riffle block num =$b3")
         return (success, null.asInstanceOf[Seq[ShuffleBlockId]])
       }
     }
