@@ -150,52 +150,56 @@ private[spark] class SortShuffleWriter[K, V, C](
 //        }
 //      }
 //    }
-    while (blockManager.status) {
-      blockManager.occupy
-      var success = false
-      val b1 = blockManager.getMatchingBlockIds(block => true)
-      val b1length = b1.length
-      for (i <- b1) {
-        val name = i.name
-        logInfo(s"blockId name---->$name && taskId=$mapId && total num = $b1length")
-      }
-      val shuffleBlockIds = b1.filter(blockId => {(
-          blockId.isShuffleIndex &&
-          blockId.asInstanceOf[ShuffleIndexBlockId].shuffleId == dep.shuffleId &&
-          blockId.asInstanceOf[ShuffleIndexBlockId].reduceId  == 0  &&
-          blockId.asInstanceOf[ShuffleIndexBlockId].getStatus &&
-          !blockId.asInstanceOf[ShuffleIndexBlockId].flag)})
-      val shuffleLength = shuffleBlockIds.length
-      for (i <- shuffleBlockIds) {
-        val name = i.name
-        logInfo(s"*****blockId name---->$name && taskId=$mapId && total num = $shuffleLength")
-      }
-      // It may reduce efficient since this code will search all blocks
-      if (shuffleBlockIds.length > riffleThreshold) {
-        logInfo(s"start merge riffle blocks, " +
-          s"the blocks num has been over the riffle threshold!!!taskId=$mapId")
-        // Change blocks' flag in case other tasks change it.
-        for (id <- shuffleBlockIds) {
-          id.asInstanceOf[ShuffleIndexBlockId].change(true)
+    while (true) {
+      if (blockManager.status) {
+        blockManager.occupy
+        var success = false
+        val b1 = blockManager.getMatchingBlockIds(block => true)
+        val b1length = b1.length
+        for (i <- b1) {
+          val name = i.name
+          logInfo(s"blockId name---->$name && taskId=$mapId && total num = $b1length")
         }
-        success = true
-        val riffleBlocks = new Array[ShuffleBlockId](shuffleBlockIds.length)
-        val it = shuffleBlockIds.iterator
-        for (i <- shuffleBlockIds.indices) {
-          val mapIdRiffle = it.next().asInstanceOf[ShuffleIndexBlockId].getMapId
-          riffleBlocks(i) = ShuffleBlockId(dep.shuffleId, mapIdRiffle, 0)
-          val ss = riffleBlocks(i).name
-          logInfo(s"************fetch block id = $ss**************")
+        val shuffleBlockIds = b1.filter(blockId => {
+          (
+            blockId.isShuffleIndex &&
+              blockId.asInstanceOf[ShuffleIndexBlockId].shuffleId == dep.shuffleId &&
+              blockId.asInstanceOf[ShuffleIndexBlockId].reduceId == 0 &&
+              blockId.asInstanceOf[ShuffleIndexBlockId].getStatus &&
+              !blockId.asInstanceOf[ShuffleIndexBlockId].flag)
+        })
+        val shuffleLength = shuffleBlockIds.length
+        for (i <- shuffleBlockIds) {
+          val name = i.name
+          logInfo(s"*****blockId name---->$name && taskId=$mapId && total num = $shuffleLength")
         }
-        blockManager.release
-        return (success, riffleBlocks.toSeq)
-      } else {
-        logInfo(s"waiting enough block && " +
-          s"release the blockManager lock && " +
-          s"the block total num = $b1" +
-          s"the shuffle block num = $shuffleLength")
-        blockManager.release
-        return (success, null.asInstanceOf[Seq[ShuffleBlockId]])
+        // It may reduce efficient since this code will search all blocks
+        if (shuffleBlockIds.length > riffleThreshold) {
+          logInfo(s"start merge riffle blocks, " +
+            s"the blocks num has been over the riffle threshold!!!taskId=$mapId")
+          // Change blocks' flag in case other tasks change it.
+          for (id <- shuffleBlockIds) {
+            id.asInstanceOf[ShuffleIndexBlockId].change(true)
+          }
+          success = true
+          val riffleBlocks = new Array[ShuffleBlockId](shuffleBlockIds.length)
+          val it = shuffleBlockIds.iterator
+          for (i <- shuffleBlockIds.indices) {
+            val mapIdRiffle = it.next().asInstanceOf[ShuffleIndexBlockId].getMapId
+            riffleBlocks(i) = ShuffleBlockId(dep.shuffleId, mapIdRiffle, 0)
+            val ss = riffleBlocks(i).name
+            logInfo(s"************fetch block id = $ss**************")
+          }
+          blockManager.release
+          return (success, riffleBlocks.toSeq)
+        } else {
+          logInfo(s"waiting enough block && " +
+            s"release the blockManager lock && " +
+            s"the block total num = $b1" +
+            s"the shuffle block num = $shuffleLength")
+          blockManager.release
+          return (success, null.asInstanceOf[Seq[ShuffleBlockId]])
+        }
       }
     }
     // It will never arrive this code
