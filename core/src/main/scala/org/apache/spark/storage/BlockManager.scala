@@ -408,6 +408,12 @@ private[spark] class BlockManager(
       .toArray
       .toSeq
   }
+  def getRiffleBlocks : Seq[(BlockId, BlockInfo)] = {
+    blockInfoManager.entries.toArray.toSeq
+  }
+  def getRiffleDiskBlocks : Seq[BlockId] = {
+    diskBlockManager.getAllBlocks()
+  }
   private var flagSys : Boolean = true
   def occupy : Unit = flagSys = false
   def release : Unit = flagSys = true

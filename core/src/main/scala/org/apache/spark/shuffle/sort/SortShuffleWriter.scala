@@ -141,13 +141,15 @@ private[spark] class SortShuffleWriter[K, V, C](
         val mapStatus = status(dep.shuffleId)
         val length = mapStatus.length
         val shuffleId = dep.shuffleId
-        for(i <- mapStatus) {
-          val mm = i.location
           logInfo(s"xxxxxxxxxxxxxxxxxxxxx " +
             s"*****mapStatus length--->$length*****shuffle---->$shuffleId" +
-            s"*****task--->$mapId****executorId--->$mm" +
+            s"*****task--->$mapId" +
             s"xxxxxxxxxxxxxxxxxxxxxxxxxx")
-        }
+      } else {
+        logInfo(s"XXXXXXXXXXXXXXXXXX" +
+          s"mapstatues=0" +
+          s"*****task---->$mapId" +
+          s"XXXXXXXXXXXXXXXXXXXXXX")
       }
     }
     while (true) {
@@ -156,6 +158,26 @@ private[spark] class SortShuffleWriter[K, V, C](
           blockManager.occupy
           var success = false
           val b1 = blockManager.getMatchingBlockIds(block => true)
+          val b2 = blockManager.getRiffleBlocks
+          val b3 = blockManager.getRiffleDiskBlocks
+          if (b2.length > 0) {
+            for (bb <- b2) {
+              val name = bb._1.name
+              val info = bb._2.size
+              logInfo(s"taskId=$mapId && blocksRiffle=$name &&info_size=$info")
+            }
+          }
+          if (b3.length > 0) {
+            for (bb <- b3) {
+              val name = bb.name
+              logInfo(s"taskId=$mapId && blocksRiffleDisk=$name")
+            }
+          }
+
+
+
+
+
           val shuffleBlockIds = b1.filter(blockId => {(
               blockId.isShuffleIndex &&
               blockId.asInstanceOf[ShuffleIndexBlockId].shuffleId == dep.shuffleId &&
