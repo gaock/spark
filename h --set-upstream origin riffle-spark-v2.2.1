@@ -1,0 +1,39 @@
+[33mcommit c6abddb97f92482f1d294a747547c10019171fab[m[33m ([m[1;36mHEAD -> [m[1;32mriffle-spark-v2.2.1[m[33m)[m
+Author: gaock <gaochuanp@gmail.com>
+Date:   Wed Jun 20 11:29:17 2018 +0800
+
+    conf.getBoolean(spark.conf.isUseRiffle)
+
+[1mdiff --git a/core/src/main/scala/org/apache/spark/MapOutputTracker.scala b/core/src/main/scala/org/apache/spark/MapOutputTracker.scala[m
+[1mindex cb1a3320dc..a68869a251 100644[m
+[1m--- a/core/src/main/scala/org/apache/spark/MapOutputTracker.scala[m
+[1m+++ b/core/src/main/scala/org/apache/spark/MapOutputTracker.scala[m
+[36m@@ -698,7 +698,8 @@[m [mprivate[spark] object MapOutputTracker extends Logging {[m
+       } else {[m
+         for (part <- startPartition until endPartition) {[m
+           splitsByAddress.getOrElseUpdate(status.location, ArrayBuffer()) +=[m
+[31m-            ((ShuffleBlockId(shuffleId, mapId, part), tt(true, status, part)))[m
+[32m+[m[32m            ((ShuffleBlockId(shuffleId, mapId, part),[m
+[32m+[m[32m              tt(SparkEnv.get.conf.getBoolean("spark.conf.isUseRiffle", false), status, part)))[m
+         }[m
+       }[m
+     }[m
+[1mdiff --git a/core/src/main/scala/org/apache/spark/shuffle/sort/SortShuffleWriter.scala b/core/src/main/scala/org/apache/spark/shuffle/sort/SortShuffleWriter.scala[m
+[1mindex 24881d0fb6..c4b229c863 100644[m
+[1m--- a/core/src/main/scala/org/apache/spark/shuffle/sort/SortShuffleWriter.scala[m
+[1m+++ b/core/src/main/scala/org/apache/spark/shuffle/sort/SortShuffleWriter.scala[m
+[36m@@ -29,10 +29,10 @@[m [mimport org.apache.spark.util.collection.ExternalSorter[m
+ [m
+ [m
+ private[spark] class SortShuffleWriter[K, V, C]([m
+[31m-                                                 shuffleBlockResolver: IndexShuffleBlockResolver,[m
+[31m-                                                 handle: BaseShuffleHandle[K, V, C],[m
+[31m-                                                 mapId: Int,[m
+[31m-                                                 context: TaskContext)[m
+[32m+[m[32m   shuffleBlockResolver: IndexShuffleBlockResolver,[m
+[32m+[m[32m   handle: BaseShuffleHandle[K, V, C],[m
+[32m+[m[32m   mapId: Int,[m
+[32m+[m[32m   context: TaskContext)[m
+   extends ShuffleWriter[K, V] with Logging {[m
+ [m
+   private val dep = handle.dependency[m
