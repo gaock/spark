@@ -141,10 +141,13 @@ private[spark] class SortShuffleWriter[K, V, C](
         val mapStatus = status(dep.shuffleId)
         val length = mapStatus.length
         val shuffleId = dep.shuffleId
-          logInfo(s"xxxxxxxxxxxxxxxxxxxxx " +
-            s"*****mapStatus length--->$length*****shuffle---->$shuffleId" +
+        // scalastyle:off println
+        println("xxxxxxxxxxxxxxxxxxxxx " +
+            s"*****mapStatus length--->$length" +
+            s"*****shuffle---->$shuffleId" +
             s"*****task--->$mapId" +
-            s"xxxxxxxxxxxxxxxxxxxxxxxxxx")
+            "xxxxxxxxxxxxxxxxxxxxxxxxxx")
+        // scalastyle:on println
       } else {
         logInfo(s"XXXXXXXXXXXXXXXXXX" +
           s"mapstatues=0" +
