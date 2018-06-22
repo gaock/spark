@@ -101,7 +101,6 @@ private[spark] class SortShuffleWriter[K, V, C](
         logError(s"Error while deleting temp file ${tmp.getAbsolutePath}")
       }
     }
-    logInfo(s"isUseRiffle:$isUseRiffle **** test is use riffle ***taskId=$mapId")
     if (isUseRiffle) {
       logInfo(s"We Use Riffle to Merge Files!****taskId=$mapId")
       rifflePartitionLengths = new Array[Long](partitionLengths.length)
@@ -135,32 +134,28 @@ private[spark] class SortShuffleWriter[K, V, C](
   }
 
   def isRiffleMerge(): (Boolean, Seq[ShuffleBlockId]) = {
-//    mapOutputTracker.synchronized {
-//      val status = mapOutputTracker.getMapStatuses()
-//      if (status.contains(dep.shuffleId)) {
-//        val mapStatus = status(dep.shuffleId)
-//        val length = mapStatus.length
-//        val shuffleId = dep.shuffleId
-//        logInfo(s"mapStatus length $length*****shuffle-$shuffleId*****task-$mapId")
-//        if (length < riffleThreshold) {
-//          for (m <- mapStatus) {
-//            m.
-//          }
-//          return (true, for ())
-//        }
-//      }
-//    }
+
+    mapOutputTracker.synchronized {
+      val status = mapOutputTracker.getMapStatuses()
+      if (status.contains(dep.shuffleId)) {
+        val mapStatus = status(dep.shuffleId)
+        val length = mapStatus.length
+        val shuffleId = dep.shuffleId
+        for(i <- mapStatus) {
+          val mm = i.location
+          logInfo(s"xxxxxxxxxxxxxxxxxxxxx " +
+            s"*****mapStatus length--->$length*****shuffle---->$shuffleId" +
+            s"*****task--->$mapId****executorId--->$mm" +
+            s"xxxxxxxxxxxxxxxxxxxxxxxxxx")
+        }
+      }
+    }
     while (true) {
       if (blockManager.status) {
         synchronized {
           blockManager.occupy
           var success = false
           val b1 = blockManager.getMatchingBlockIds(block => true)
-          val b1length = b1.length
-          for (i <- b1) {
-            val name = i.name
-            logInfo(s"blockId name---->$name && taskId=$mapId && total num = $b1length")
-          }
           val shuffleBlockIds = b1.filter(blockId => {(
               blockId.isShuffleIndex &&
               blockId.asInstanceOf[ShuffleIndexBlockId].shuffleId == dep.shuffleId &&
@@ -171,7 +166,10 @@ private[spark] class SortShuffleWriter[K, V, C](
           val shuffleLength = shuffleBlockIds.length
           for (i <- shuffleBlockIds) {
             val name = i.name
-            logInfo(s"*****blockId name---->$name && taskId=$mapId && total num = $shuffleLength")
+            val finish = i.asInstanceOf[ShuffleIndexBlockId].getStatus
+            val flag = i.asInstanceOf[ShuffleIndexBlockId].flag
+            logInfo(s"*****blockId name---->$name && taskId=$mapId && total num = $shuffleLength" +
+              s"*****block flag--->$flag && block finish--->$finish")
           }
           // It may reduce efficient since this code will search all blocks
           if (shuffleBlockIds.length > riffleThreshold) {
