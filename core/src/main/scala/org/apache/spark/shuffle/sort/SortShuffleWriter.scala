@@ -134,7 +134,7 @@ private[spark] class SortShuffleWriter[K, V, C](
       }
     }
   }
-
+// success
   def isRiffleMerge(): (Boolean, Seq[ShuffleBlockId]) = {
     while (true) {
       if (blockManager.status) {
@@ -203,6 +203,9 @@ private[spark] class SortShuffleWriter[K, V, C](
         if (!readResult.contains(id)) {
           val byte = new Array[Byte](read)
           inputStream.read(byte)
+          print("-------Byte print------on\n")
+          byte.foreach(print)
+          print("\n-------Byte print------off")
           readResult += (id -> byte)
           if (read < readSize) {
             flag = true
