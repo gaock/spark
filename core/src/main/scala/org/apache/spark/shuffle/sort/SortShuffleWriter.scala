@@ -105,9 +105,6 @@ private[spark] class SortShuffleWriter[K, V, C](
       }
     }
     if (isUseRiffle) {
-      // scalastyle:off  println
-      println(s"isUseRiffle=true****taskId=$mapId")
-      // scalastyle:on  println
       rifflePartitionLengths = new Array[Long](partitionLengths.length)
       val res = isRiffleMerge()
       if (res._1) {
@@ -146,9 +143,6 @@ private[spark] class SortShuffleWriter[K, V, C](
           val riffleBlocks = new ArrayBuffer[ShuffleBlockId]()
           val blockInfos = blockManager.getTaskResultInfos()
           for ((shuffleBlockId, falg) <- blockInfos) {
-            // scalastyle:off  println
-            println(s"block--->$shuffleBlockId && falg--->$falg****taskId=$mapId")
-            // scalastyle:on  println
             if (!falg) {
               riffleBlocks.append(shuffleBlockId)
             }
@@ -181,6 +175,12 @@ private[spark] class SortShuffleWriter[K, V, C](
     for (i <- ids) {
       val index = shuffleBlockResolver.getSegmentIndex(i)
       blockIdRead += (i -> ((0L, false, index)))
+      // scalastyle:off  println
+      println(s"blockIndex_Print****taskId=$mapId")
+      // scalastyle:on  println
+      for (mm <- index) {
+        print(mm + " ")
+      }
     }
     blockIdRead
   }

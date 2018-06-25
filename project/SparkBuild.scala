@@ -214,7 +214,7 @@ object SparkBuild extends PomBuild {
 
     // Override SBT's default resolvers:
     resolvers := Seq(
-      DefaultMavenRepository,
+      Resolver.url("aliyun", url("Index of /groups/public")),
       Resolver.mavenLocal,
       Resolver.file("local", file(Path.userHome.absolutePath + "/.ivy2/local"))(Resolver.ivyStylePatterns)
     ),

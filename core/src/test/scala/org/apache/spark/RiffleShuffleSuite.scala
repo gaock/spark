@@ -17,18 +17,6 @@
 
 package org.apache.spark
 
-import java.io.File
-
-import scala.collection.JavaConverters._
-
-import org.apache.commons.io.FileUtils
-import org.apache.commons.io.filefilter.TrueFileFilter
-import org.scalatest.BeforeAndAfterAll
-
-import org.apache.spark.rdd.ShuffledRDD
-import org.apache.spark.serializer.{JavaSerializer, KryoSerializer}
-import org.apache.spark.shuffle.sort.SortShuffleManager
-import org.apache.spark.util.Utils
 
 
 class RiffleShuffleSuite extends SparkFunSuite with LocalSparkContext {
@@ -41,7 +29,7 @@ class RiffleShuffleSuite extends SparkFunSuite with LocalSparkContext {
       .setMaster("local")
       .setAppName("test")
         .set("spark.conf.isUseRiffle", "true")
-        .set("spark.conf.riffleThreshold", "1")
+        .set("spark.conf.riffleThreshold", "10")
     sc = new SparkContext(conf)
   }
 
@@ -55,6 +43,9 @@ class RiffleShuffleSuite extends SparkFunSuite with LocalSparkContext {
 //  }
   test("use riffle") {
     sc.setLogLevel("INFO")
-    sc.parallelize(1 to 1000000, 20).map((_, 1)).reduceByKey(_ + _).count
+    val res = sc.parallelize(1 to 100, 20).map((_, 1)).reduceByKey(_ + _, 10).count
+    // scalastyle:off  println
+    println(res)
+    // scalastyle:on  println
   }
 }
