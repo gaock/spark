@@ -17,6 +17,8 @@
 
 package org.apache.spark.shuffle.sort
 
+import scala.collection.mutable.ArrayBuffer
+
 import org.apache.spark._
 import org.apache.spark.executor.ShuffleWriteMetrics
 import org.apache.spark.internal.Logging
@@ -25,6 +27,7 @@ import org.apache.spark.shuffle.{BaseShuffleHandle, IndexShuffleBlockResolver, S
 import org.apache.spark.storage.{BlockId, DiskBlockObjectWriter, ShuffleBlockId, ShuffleIndexBlockId}
 import org.apache.spark.util.Utils
 import org.apache.spark.util.collection.ExternalSorter
+
 
 
 
@@ -102,7 +105,9 @@ private[spark] class SortShuffleWriter[K, V, C](
       }
     }
     if (isUseRiffle) {
-      logInfo(s"We Use Riffle to Merge Files!****taskId=$mapId")
+      // scalastyle:off  println
+      println(s"isUseRiffle=true****taskId=$mapId")
+      // scalastyle:on  println
       rifflePartitionLengths = new Array[Long](partitionLengths.length)
       val res = isRiffleMerge()
       if (res._1) {
@@ -134,94 +139,35 @@ private[spark] class SortShuffleWriter[K, V, C](
   }
 
   def isRiffleMerge(): (Boolean, Seq[ShuffleBlockId]) = {
-
-    mapOutputTracker.synchronized {
-      val status = mapOutputTracker.getMapStatuses()
-      if (status.contains(dep.shuffleId)) {
-        val mapStatus = status(dep.shuffleId)
-        val length = mapStatus.length
-        val shuffleId = dep.shuffleId
-        // scalastyle:off println
-        println("xxxxxxxxxxxxxxxxxxxxx " +
-            s"*****mapStatus length--->$length" +
-            s"*****shuffle---->$shuffleId" +
-            s"*****task--->$mapId" +
-            "xxxxxxxxxxxxxxxxxxxxxxxxxx")
-        // scalastyle:on println
-      } else {
-        logInfo(s"XXXXXXXXXXXXXXXXXX" +
-          s"mapstatues=0" +
-          s"*****task---->$mapId" +
-          s"XXXXXXXXXXXXXXXXXXXXXX")
-      }
-    }
     while (true) {
       if (blockManager.status) {
         synchronized {
           blockManager.occupy
-          var success = false
-          val b1 = blockManager.getMatchingBlockIds(block => true)
-          val b2 = blockManager.getRiffleBlocks
-          val b3 = blockManager.getRiffleDiskBlocks
-          if (b2.length > 0) {
-            for (bb <- b2) {
-              val name = bb._1.name
-              val info = bb._2.size
-              logInfo(s"taskId=$mapId && blocksRiffle=$name &&info_size=$info")
+          val riffleBlocks = new ArrayBuffer[ShuffleBlockId]()
+          val blockInfos = blockManager.getTaskResultInfos()
+          for ((shuffleBlockId, falg) <- blockInfos) {
+            // scalastyle:off  println
+            println(s"block--->$shuffleBlockId && falg--->$falg****taskId=$mapId")
+            // scalastyle:on  println
+            if (!falg) {
+              riffleBlocks.append(shuffleBlockId)
             }
           }
-          if (b3.length > 0) {
-            for (bb <- b3) {
-              val name = bb.name
-              logInfo(s"taskId=$mapId && blocksRiffleDisk=$name")
-            }
-          }
-
-
-
-
-
-          val shuffleBlockIds = b1.filter(blockId => {(
-              blockId.isShuffleIndex &&
-              blockId.asInstanceOf[ShuffleIndexBlockId].shuffleId == dep.shuffleId &&
-              blockId.asInstanceOf[ShuffleIndexBlockId].reduceId == 0 &&
-              blockId.asInstanceOf[ShuffleIndexBlockId].getStatus &&
-              !blockId.asInstanceOf[ShuffleIndexBlockId].flag)
-          })
-          val shuffleLength = shuffleBlockIds.length
-          for (i <- shuffleBlockIds) {
-            val name = i.name
-            val finish = i.asInstanceOf[ShuffleIndexBlockId].getStatus
-            val flag = i.asInstanceOf[ShuffleIndexBlockId].flag
-            logInfo(s"*****blockId name---->$name && taskId=$mapId && total num = $shuffleLength" +
-              s"*****block flag--->$flag && block finish--->$finish")
-          }
-          // It may reduce efficient since this code will search all blocks
-          if (shuffleBlockIds.length > riffleThreshold) {
-            logInfo(s"start merge riffle blocks, " +
-              s"the blocks num has been over the riffle threshold!!!taskId=$mapId")
-            // Change blocks' flag in case other tasks change it.
-            for (id <- shuffleBlockIds) {
-              id.asInstanceOf[ShuffleIndexBlockId].change(true)
-            }
-            success = true
-            val riffleBlocks = new Array[ShuffleBlockId](shuffleBlockIds.length)
-            val it = shuffleBlockIds.iterator
-            for (i <- shuffleBlockIds.indices) {
-              val mapIdRiffle = it.next().asInstanceOf[ShuffleIndexBlockId].getMapId
-              riffleBlocks(i) = ShuffleBlockId(dep.shuffleId, mapIdRiffle, 0)
-              val ss = riffleBlocks(i).name
-              logInfo(s"************fetch block id = $ss**************")
+          // insert itself
+          riffleBlocks.append(ShuffleBlockId(dep.shuffleId, mapId, 0))
+          if (riffleBlocks.length >= riffleThreshold ||
+            blockInfos.iterator.length == dep.partitioner.numPartitions - 1) {
+            for (id <- riffleBlocks) {
+              // scalastyle:off  println
+              println(s"riffle blocks--->$id.name****taskId=$mapId")
+              // scalastyle:on  println
+              blockManager.riffleReadSuccess(id)
             }
             blockManager.release
-            return (success, riffleBlocks.toSeq)
+            return (true, riffleBlocks)
           } else {
-            logInfo(s"waiting enough block && " +
-              s"release the blockManager lock && " +
-              s"the block total num = $b1" +
-              s"the shuffle block num = $shuffleLength")
             blockManager.release
-            return (success, null.asInstanceOf[Seq[ShuffleBlockId]])
+            return (false, null.asInstanceOf[Seq[ShuffleBlockId]])
           }
         }
       }
@@ -380,6 +326,8 @@ private[spark] class SortShuffleWriter[K, V, C](
       }
       stopping = true
       if (success) {
+        blockManager.insertTaskResultInfo(
+          ShuffleBlockId(dep.shuffleId, mapId, IndexShuffleBlockResolver.NOOP_REDUCE_ID))
         return Option(mapStatus)
       } else {
         return None

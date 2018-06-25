@@ -37,9 +37,9 @@ import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.internal.Logging
 import org.apache.spark.memory.TaskMemoryManager
 import org.apache.spark.rpc.RpcTimeout
-import org.apache.spark.scheduler.{DirectTaskResult, IndirectTaskResult, Task, TaskDescription}
+import org.apache.spark.scheduler._
 import org.apache.spark.shuffle.FetchFailedException
-import org.apache.spark.storage.{StorageLevel, TaskResultBlockId}
+import org.apache.spark.storage.{ShuffleBlockId, StorageLevel, TaskResultBlockId}
 import org.apache.spark.util._
 import org.apache.spark.util.io.ChunkedByteBuffer
 
@@ -63,6 +63,15 @@ private[spark] class Executor(
 
   // Application dependencies (added through SparkContext) that we've fetched so far on this node.
   // Each map holds the master's timestamp for the version of that file or JAR we got.
+  private var executorTaskResultInfo: HashMap[(ShuffleBlockId, Boolean), MapStatus]
+  = new HashMap[(ShuffleBlockId, Boolean), MapStatus]()
+  def getExecutorTaskResultInfo() : HashMap[(ShuffleBlockId, Boolean), MapStatus]
+  = this.executorTaskResultInfo
+  def taskResultOperation(shuffleBlockId: ShuffleBlockId) : Unit = {
+    val value = executorTaskResultInfo.get((shuffleBlockId, false))
+    executorTaskResultInfo - ((shuffleBlockId, false))
+    executorTaskResultInfo.put((shuffleBlockId, true), value.get)
+  }
   private val currentFiles: HashMap[String, Long] = new HashMap[String, Long]()
   private val currentJars: HashMap[String, Long] = new HashMap[String, Long]()
 
@@ -364,6 +373,15 @@ private[spark] class Executor(
               logInfo(errMsg)
             }
           }
+        }
+        if (task.isInstanceOf[ShuffleMapTask] && value.isInstanceOf[MapStatus]) {
+          val shuffleTask = task.asInstanceOf[ShuffleMapTask]
+          val shuffleId = shuffleTask.stageId
+          val mapId = shuffleTask.partitionId
+          val blockManager = SparkEnv.get.blockManager
+
+          executorTaskResultInfo.put((ShuffleBlockId(shuffleId, mapId, 0), false),
+            value.asInstanceOf[MapStatus])
         }
         task.context.fetchFailed.foreach { fetchFailure =>
           // uh-oh.  it appears the user code has caught the fetch-failure without throwing any
