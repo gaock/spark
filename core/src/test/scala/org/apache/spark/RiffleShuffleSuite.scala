@@ -45,7 +45,7 @@ class RiffleShuffleSuite extends SparkFunSuite with LocalSparkContext {
     sc.setLogLevel("INFO")
     val res = sc.parallelize(1 to 100, 20).map((_, 1)).reduceByKey(_ + _, 10).count
     // scalastyle:off  println
-    println(res)
+    println("****" + res)
     // scalastyle:on  println
   }
 }

@@ -93,7 +93,6 @@ private[spark] class SortShuffleWriter[K, V, C](
         context, aggregator = None, Some(dep.partitioner), ordering = None, dep.serializer)
     }
     sorter.insertAll(records)
-
     // Don't bother including the time to open the merged output file in the shuffle write time,
     // because it just opens a single file, so is typically too fast to measure accurately
     // (see SPARK-3570).
@@ -110,6 +109,14 @@ private[spark] class SortShuffleWriter[K, V, C](
       }
     }
     if (isUseRiffle) {
+      if (mapId == 9) {
+        val blockTest = blockManager.getMatchingBlockIds(_.isShuffleData)
+        print("\n ----------block test---------------------------\n")
+        for (id <- blockTest) {
+          print("\n" + id.name)
+        }
+        print("\n ----------block test---------------------------\n")
+      }
       rifflePartitionLengths = new Array[Long](partitionLengths.length)
       val res = isRiffleMerge()
       if (res._1) {
@@ -132,12 +139,23 @@ private[spark] class SortShuffleWriter[K, V, C](
           mergeRiffleBlocks()
           writeToDisk(writer, res._2)
         }
+        writer.close()
         shuffleBlockResolver.writeRiffleIndexFileAndCommit(dep.shuffleId, mapId,
           rifflePartitionLengths, tmp)
+        print("\n-------------------rifflePartitionLength---------------------\n")
+        rifflePartitionLengths.foreach(print)
         mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths,
           rifflePartitionLengths, res._2.toArray)
       } else {
         logInfo(s"waiting threshold files***taskId=$mapId")
+      }
+      if (mapId == 9) {
+        val blockTest = blockManager.getMatchingBlockIds(_.isShuffleData)
+        print("\n ----------block test---------------------------\n")
+        for (id <- blockTest) {
+          print("\n" + id.name)
+        }
+        print("\n ----------block test---------------------------\n")
       }
     }
   }
@@ -211,9 +229,6 @@ private[spark] class SortShuffleWriter[K, V, C](
         if (!readResult.contains(id)) {
           val byte = new Array[Byte](read)
           inputStream.read(byte)
-          print("-------Byte print------on\n")
-          byte.foreach(print)
-          print("\n-------Byte print------off")
           readResult += (id -> byte)
           if (read < readSize) {
             flag = true
@@ -245,18 +260,27 @@ private[spark] class SortShuffleWriter[K, V, C](
       val end = Math.min(info._1, info._3.last)
       var endSegmentId = -1
       var endSegmentFlag = false
+      var max = -1L
       for (i <- index.indices) {
-        if (i < index.length-1 && start < index(i + 1) && start >= index(i) ) {
+        if (i < index.length-1 && start < index(i + 1) && start >= index(i)) {
           startSegmentId = i
           if (start == index(i)) {
             startSegmentFlag = true
           }
+          // set startSegmentId=0 at the first time
+          if (start == 0L) {
+            startSegmentId = 0
+          }
         }
-        if (i < index.length-1 && end <= index(i + 1) && end > index(i) ) {
+        if (i < index.length-1 && end <= index(i + 1) && end > index(i)  ) {
           endSegmentId = i
+          max = index(i + 1)
           if (end == index(i + 1)) {
             endSegmentFlag = true
           }
+        }
+        if (max == index(i)) {
+          endSegmentId = i - 1
         }
       }
       for (segment <- startSegmentId  to  endSegmentId ) {
@@ -280,9 +304,20 @@ private[spark] class SortShuffleWriter[K, V, C](
           segmentStatuses.put((id, segment), (endSegmentFlag, segmentByte))
         }
         if (segment > startSegmentId && segment < endSegmentId) {
+          if (id.name.equals("shuffle_0_0_0")) {
+            print("startSegment------------->" + startSegmentId)
+            print("segment------------->" + segment)
+            print("endSegmentId------------->" + endSegmentId)
+          }
           val segmentByte = result.slice(index(segment).intValue, index(segment + 1).intValue())
           segmentStatuses.put((id, segment), (true, segmentByte))
         }
+      }
+    }
+    for (((id, segment), (flag, byte)) <- segmentStatuses) {
+      if (id.name.equals("shuffle_0_0_0")) {
+        print("\nshuffleId = " + id.name + " segment = " + segment +
+          " flag = " + flag +  " byteLength " + byte.length)
       }
     }
   }
@@ -298,13 +333,17 @@ private[spark] class SortShuffleWriter[K, V, C](
             if (segmentStatuses.contains((id, i))) {
               val value = segmentStatuses((id, i))._2
               if (value.length != 0) {
-                writer.write(value)
+                writer.write(value, 0, value.length)
+                print("\n****write**** id = " +id.name +
+                  " segment = " + i + " length = " + value.length)
               }
               segmentStatuses.remove((id, i))
               rifflePartitionLengths(i) += value.length
             }
           }
         }
+//        val segment = writer.commitAndGet()
+
       }
     } catch {
       case e: Exception =>

@@ -221,7 +221,7 @@ private[spark] class IndexShuffleBlockResolver(
         out.close()
       }
 
-      val dataFile = getDataFile(shuffleId, mapId)
+      val dataFile = getRiffleDataFile(shuffleId, mapId)
       // There is only one IndexShuffleBlockResolver per executor, this synchronization make sure
       // the following check and rename are atomic.
       synchronized {
