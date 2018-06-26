@@ -17,6 +17,7 @@
 
 package org.apache.spark.shuffle.sort
 
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 import org.apache.spark._
@@ -27,6 +28,8 @@ import org.apache.spark.shuffle.{BaseShuffleHandle, IndexShuffleBlockResolver, S
 import org.apache.spark.storage.{BlockId, DiskBlockObjectWriter, ShuffleBlockId, ShuffleIndexBlockId}
 import org.apache.spark.util.Utils
 import org.apache.spark.util.collection.ExternalSorter
+
+
 
 
 
@@ -59,8 +62,10 @@ private[spark] class SortShuffleWriter[K, V, C](
   private var readSegmentInfo = Map[ShuffleBlockId, (Int, Int)]()
   private var partitionLengths = new Array[Long](1)
   private var rifflePartitionLengths = new Array[Long](2)
+  private var segmentStatuses = new mutable.HashMap[(ShuffleBlockId, Int), (Boolean, Array[Byte])]()
 
   private var mapOutputTracker: MapOutputTracker = SparkEnv.get.mapOutputTracker
+  private var mergeBlocksLengths = 0
   private val conf = SparkEnv.get.conf
   private val isUseRiffle = conf.getBoolean("spark.conf.isUseRiffle", false)
   private val readSize = conf.getInt("spark.conf.readSize", 1024*1024*1)
@@ -119,11 +124,13 @@ private[spark] class SortShuffleWriter[K, V, C](
         val blockId = ShuffleBlockId(dep.shuffleId, mapId, 100)
         val writer = blockManager.getDiskWriter(
           blockId, tmp, dep.serializer.newInstance(), fileBufferSize, new ShuffleWriteMetrics)
-        while (blockIdRead.nonEmpty) {
+        readBlock()
+        mergeRiffleBlocks()
+        writeToDisk(writer, res._2)
+        while (segmentStatuses.nonEmpty) {
           readBlock()
-          val segments = mergeRiffle()
-          writeToDisk(segments._1 - 1, segments._2 - 1, writer, readSegmentInfo)
-          copyToByteArray(segments._2, segments._3, readSegmentInfo)
+          mergeRiffleBlocks()
+          writeToDisk(writer, res._2)
         }
         shuffleBlockResolver.writeRiffleIndexFileAndCommit(dep.shuffleId, mapId,
           rifflePartitionLengths, tmp)
@@ -158,6 +165,7 @@ private[spark] class SortShuffleWriter[K, V, C](
               blockManager.riffleReadSuccess(id)
             }
             blockManager.release
+            mergeBlocksLengths = riffleBlocks.length
             return (true, riffleBlocks)
           } else {
             blockManager.release
@@ -211,7 +219,7 @@ private[spark] class SortShuffleWriter[K, V, C](
             flag = true
           }
         } else {
-          if (read < readSize) {
+          if (read < readSize || info._1 + read == info._3.last) {
             val byte = new Array[Byte](read)
             inputStream.read(byte)
             readResult += (id -> byte)
@@ -227,54 +235,81 @@ private[spark] class SortShuffleWriter[K, V, C](
     }
   }
 
-  def mergeRiffle() : (Int, Int, Int) = {
-    // Write the min-maxMin segments to Disk.
-    // Write the maxMin-max segments to memory. It's stored as Map[Segment, Array[Byte]]
-    var min = Int.MaxValue
-    var maxMin = -1
-    var max = -1
-    for (id <- blockIdRead.keys) {
-      val info = blockIdRead(id)._3
-      val start = blockIdRead(id)._1 - readSize
-      val end = blockIdRead(id)._1
-      var inMin = Int.MaxValue
-      var inMax = -1
-      for (i <- info.indices if inMin == Int.MaxValue) {
-        if (start < info(i)) inMin = i - 1
-        if (start == info(i)) inMin = i
+  def mergeRiffleBlocks() : Unit = {
+    for ((id, info) <- blockIdRead) {
+      val result = readResult(id)
+      val index = info._3
+      val start = info._1 - readSize
+      var startSegmentId = Int.MaxValue
+      var startSegmentFlag = false
+      val end = Math.min(info._1, info._3.last)
+      var endSegmentId = -1
+      var endSegmentFlag = false
+      for (i <- index.indices) {
+        if (i < index.length-1 && start < index(i + 1) && start >= index(i) ) {
+          startSegmentId = i
+          if (start == index(i)) {
+            startSegmentFlag = true
+          }
+        }
+        if (i < index.length-1 && end <= index(i + 1) && end > index(i) ) {
+          endSegmentId = i
+          if (end == index(i + 1)) {
+            endSegmentFlag = true
+          }
+        }
       }
-      for (i <- info.indices if inMax == -1) {
-        if (end <= info(i)) inMax = i - 1
-        if (end > info.last) inMax = info.length - 2
+      for (segment <- startSegmentId  to  endSegmentId ) {
+        if (segment == startSegmentId && !segmentStatuses.contains((id, segment))) {
+          val segmentLength = (index(segment + 1) - start).intValue
+          val segmentByte = new Array[Byte](segmentLength)
+          result.copyToArray(segmentByte, start.intValue, segmentLength)
+          segmentStatuses.put((id, segment), (startSegmentFlag, segmentByte))
+        } else if (segment == startSegmentId && segmentStatuses.contains((id, segment))) {
+          val segmentLength = (index(segment + 1) - start).intValue
+          val segmentByte = new Array[Byte](segmentLength)
+          result.copyToArray(segmentByte, start.intValue, segmentLength)
+          val lastReadByte = segmentStatuses.get((id, segment)).get._2
+          val newByte = lastReadByte ++ segmentByte
+          if (newByte.length == index(segment + 1) - index(segment)) {
+            segmentStatuses.update((id, segment), (true, newByte))
+          } else {
+            print("May error")
+            segmentStatuses.update((id, segment), (false, newByte))
+          }
+        }
+        // we assumed endSegmentId > startSegmentId
+        if (segment == endSegmentId) {
+          val segmentLength = (end - index(segment)).intValue
+          val segmentByte = new Array[Byte](segmentLength)
+          result.copyToArray(segmentByte, index(segment).intValue, segmentLength)
+          segmentStatuses.put((id, segment), (endSegmentFlag, segmentByte))
+        }
+        if (segment > startSegmentId && segment < endSegmentId) {
+          val segmentLength = (index(segment + 1) - index(segment)).intValue
+          val segmentByte = new Array[Byte](segmentLength)
+          result.copyToArray(segmentByte, index(segment).intValue, segmentLength)
+          segmentStatuses.put((id, segment), (true, segmentByte))
+        }
       }
-      readSegmentInfo += (id -> ((inMin, inMax)))
-      max = if (max > inMax) max else inMax
-      min = if (min < inMin) min else inMin
-      maxMin = if (inMax > maxMin) maxMin else inMax
     }
-    return (min, maxMin, max)
   }
-  def writeToDisk(min: Int, max: Int, writer: DiskBlockObjectWriter,
-                  readSegmentInfo: Map[ShuffleBlockId, (Int, Int)]): Unit = {
+  def writeToDisk(writer: DiskBlockObjectWriter, shuffleBlockIds: Seq[ShuffleBlockId]) : Unit = {
     try {
-      for (segment <- min to max) {
-        if (segment >= 0) {
-          for (id <- blockIdRead.keys) {
-            if (memoryByte.contains((segment, id))) {
-              // write this block segment(in memory store) to disk
-              writer.write(memoryByte((segment, id)))
-              memoryByte -= ((segment, id))
-            }
-            // write this block segment(read last time) to disk
-            val info = findOffAndLen(id, segment, readSegmentInfo)
-            if (info._1 != -1) {
-              writer.write(readResult(id), info._1, info._2)
+      val writeInfo = new Array[Int](partitionLengths.length)
+      for (((id, segment), (flag, byte)) <- segmentStatuses) {
+        if (flag) writeInfo(segment) += 1
+      }
+      for (i <- writeInfo.indices) {
+        if (writeInfo(i) == mergeBlocksLengths) {
+          for (id <- shuffleBlockIds) {
+            if (segmentStatuses.contains((id, i))) {
+              writer.write(segmentStatuses((id, i))._2)
+              segmentStatuses.remove((id, i))
+              rifflePartitionLengths(i) += segmentStatuses((id, i))._2.length
             }
           }
         }
-        // record the index of segment
-        val riffleSegment = writer.commitAndGet()
-        rifflePartitionLengths(segment) = riffleSegment.length
       }
     } catch {
       case e: Exception =>
@@ -283,42 +318,7 @@ private[spark] class SortShuffleWriter[K, V, C](
     }
   }
 
-  // It should be Map[segment, Map[blockId, Array[Byte]]
 
-  def copyToByteArray(min: Int, max : Int,
-                      readSegmentInfo: Map[ShuffleBlockId, (Int, Int)]) : Unit = {
-    for (segment <- min to  max) {
-      for (id <- blockIdRead.keys) {
-        val info = findOffAndLen(id, segment, readSegmentInfo)
-        if (info._1 != -1) {
-          val tmp = new Array[Byte](info._2)
-          for (i <- tmp.indices) {
-            tmp(i) = readResult(id)(i + info._1)
-          }
-          memoryByte += ((segment, id) -> tmp)
-        }
-      }
-    }
-  }
-  def findOffAndLen(id : ShuffleBlockId, segment: Int, readStoreInfo :
-  Map[ShuffleBlockId, (Int, Int)]): (Int, Int) = {
-    if (segment == readStoreInfo(id)._1) {
-      val location = 0
-      val length = blockIdRead(id)._3(segment + 1) - (blockIdRead(id)._1 - readSize)
-      return (location.intValue(), length.intValue())
-    } else if (segment ==  readStoreInfo(id)._2) {
-      val location = blockIdRead(id)._3(segment) - (blockIdRead(id)._1 - readSize)
-      val length = if (blockIdRead(id)._1 <= blockIdRead(id)._3.last) {
-        blockIdRead(id)._1 - blockIdRead(id)._3(segment)}
-      else blockIdRead(id)._3.last - blockIdRead(id)._3(segment)
-      return (location.intValue(), length.intValue())
-    } else if (segment < readStoreInfo(id)._2 && segment > readStoreInfo(id)._1) {
-      val location = blockIdRead(id)._3(segment) - (blockIdRead(id)._1 - readSize)
-      val length = blockIdRead(id)._3(segment + 1) - blockIdRead(id)._3(segment)
-      return (location.intValue(), length.intValue())
-    }
-    (-1, -1)
-  }
 
 
   /** Close this writer, passing along whether the map completed */
