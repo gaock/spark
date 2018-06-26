@@ -261,14 +261,10 @@ private[spark] class SortShuffleWriter[K, V, C](
       }
       for (segment <- startSegmentId  to  endSegmentId ) {
         if (segment == startSegmentId && !segmentStatuses.contains((id, segment))) {
-          val segmentLength = (index(segment + 1) - start).intValue
-          val segmentByte = new Array[Byte](segmentLength)
-          result.copyToArray(segmentByte, start.intValue, segmentLength)
+          val segmentByte = result.slice(start.intValue, index(segment + 1).intValue)
           segmentStatuses.put((id, segment), (startSegmentFlag, segmentByte))
         } else if (segment == startSegmentId && segmentStatuses.contains((id, segment))) {
-          val segmentLength = (index(segment + 1) - start).intValue
-          val segmentByte = new Array[Byte](segmentLength)
-          result.copyToArray(segmentByte, start.intValue, segmentLength)
+          val segmentByte = result.slice(start.intValue, index(segment + 1).intValue)
           val lastReadByte = segmentStatuses.get((id, segment)).get._2
           val newByte = lastReadByte ++ segmentByte
           if (newByte.length == index(segment + 1) - index(segment)) {
@@ -280,15 +276,11 @@ private[spark] class SortShuffleWriter[K, V, C](
         }
         // we assumed endSegmentId > startSegmentId
         if (segment == endSegmentId) {
-          val segmentLength = (end - index(segment)).intValue
-          val segmentByte = new Array[Byte](segmentLength)
-          result.copyToArray(segmentByte, index(segment).intValue, segmentLength)
+          val segmentByte = result.slice(index(segment).intValue, end.intValue)
           segmentStatuses.put((id, segment), (endSegmentFlag, segmentByte))
         }
         if (segment > startSegmentId && segment < endSegmentId) {
-          val segmentLength = (index(segment + 1) - index(segment)).intValue
-          val segmentByte = new Array[Byte](segmentLength)
-          result.copyToArray(segmentByte, index(segment).intValue, segmentLength)
+          val segmentByte = result.slice(index(segment).intValue, index(segment + 1).intValue())
           segmentStatuses.put((id, segment), (true, segmentByte))
         }
       }
@@ -297,16 +289,19 @@ private[spark] class SortShuffleWriter[K, V, C](
   def writeToDisk(writer: DiskBlockObjectWriter, shuffleBlockIds: Seq[ShuffleBlockId]) : Unit = {
     try {
       val writeInfo = new Array[Int](partitionLengths.length)
-      for (((id, segment), (flag, byte)) <- segmentStatuses) {
+      for (((_, segment), (flag, _)) <- segmentStatuses) {
         if (flag) writeInfo(segment) += 1
       }
       for (i <- writeInfo.indices) {
         if (writeInfo(i) == mergeBlocksLengths) {
           for (id <- shuffleBlockIds) {
             if (segmentStatuses.contains((id, i))) {
-              writer.write(segmentStatuses((id, i))._2)
+              val value = segmentStatuses((id, i))._2
+              if (value.length != 0) {
+                writer.write(value)
+              }
               segmentStatuses.remove((id, i))
-              rifflePartitionLengths(i) += segmentStatuses((id, i))._2.length
+              rifflePartitionLengths(i) += value.length
             }
           }
         }
