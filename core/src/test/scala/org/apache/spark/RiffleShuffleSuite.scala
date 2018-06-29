@@ -30,7 +30,7 @@ class RiffleShuffleSuite extends SparkFunSuite with LocalSparkContext {
       .setAppName("test")
         .set("spark.conf.isUseRiffle", "true")
         .set("spark.conf.riffleThreshold", "10")
-        .set("spark.conf.readSize", "400")
+        .set("spark.conf.readSize", "30")
     sc = new SparkContext(conf)
   }
 
@@ -44,7 +44,7 @@ class RiffleShuffleSuite extends SparkFunSuite with LocalSparkContext {
 //  }
   test("use riffle") {
     sc.setLogLevel("INFO")
-    val res = sc.parallelize(1 to 200, 10).map(key => (key % 100, 1))
+    val res = sc.parallelize(1 to 2000000, 10).map(key => (key % 100, 1))
       .reduceByKey(_ + _, 10).count
     // scalastyle:off  println
     println("\n****" + res)

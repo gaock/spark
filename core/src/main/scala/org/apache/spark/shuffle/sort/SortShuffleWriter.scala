@@ -108,6 +108,7 @@ private[spark] class SortShuffleWriter[K, V, C](
         }
         print("\n ----------block test---------------------------\n")
       }
+      rifflePartitionLengths(numPartitions - 1) = -1
       val memoryManager = new RiffleMemoryManager
         [(ShuffleBlockId, Int), (Boolean, Array[Byte])](context)
       val acquireMemory = memoryManager.acquireMemory(50*1024*1024)
@@ -121,7 +122,7 @@ private[spark] class SortShuffleWriter[K, V, C](
         val output = shuffleBlockResolver.getRiffleDataFile(dep.shuffleId, mapId)
         val tmp = Utils.tempFileWith(output)
         val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(tmp)))
-        while (rifflePartitionLengths.last == 0) {
+        while (rifflePartitionLengths.last == -1) {
           readBlock()
           mergeRiffleBlocks()
           writeToDisk(out, res._2)
@@ -265,36 +266,50 @@ private[spark] class SortShuffleWriter[K, V, C](
           endSegmentId = i - 1
         }
       }
-      for (segment <- startSegmentId  to  endSegmentId ) {
-        if (segment == startSegmentId && !segmentStatuses.contains((id, segment))) {
-          val segmentByte = result.slice(0, (index(segment + 1) - start).intValue)
-          segmentStatuses.put((id, segment), (startSegmentFlag, segmentByte))
-        } else if (segment == startSegmentId && segmentStatuses.contains((id, segment))) {
-          val segmentByte = result.slice(0, (index(segment + 1) - start).intValue)
-          val lastReadByte = segmentStatuses.get((id, segment)).get._2
+      if (startSegmentId == endSegmentId) {
+        val segmentByte = result.slice(0, (end - start).intValue)
+        if (startSegmentFlag) {
+          segmentStatuses.put((id, startSegmentId), (endSegmentFlag, segmentByte))
+        }
+        if (!startSegmentFlag) {
+          val lastReadByte = segmentStatuses.get((id, startSegmentId)).get._2
           val newByte = lastReadByte ++ segmentByte
-          if (newByte.length == index(segment + 1) - index(segment)) {
-            segmentStatuses.update((id, segment), (true, newByte))
-          } else {
-            print("\nMay error\n")
-            segmentStatuses.update((id, segment), (false, newByte))
+          segmentStatuses.update((id, startSegmentId), (endSegmentFlag, newByte))
+        }
+      }
+      else {
+        for (segment <- startSegmentId to endSegmentId) {
+          if (segment == startSegmentId && !segmentStatuses.contains((id, segment))) {
+            val segmentByte = result.slice(0, (index(segment + 1) - start).intValue)
+            segmentStatuses.put((id, segment), (startSegmentFlag, segmentByte))
+          } else if (segment == startSegmentId && segmentStatuses.contains((id, segment))) {
+            val segmentByte = result.slice(0, (index(segment + 1) - start).intValue)
+            val lastReadByte = segmentStatuses.get((id, segment)).get._2
+            val newByte = lastReadByte ++ segmentByte
+            if (newByte.length == index(segment + 1) - index(segment)) {
+              segmentStatuses.update((id, segment), (true, newByte))
+            } else {
+              print("\nMay error\n")
+              segmentStatuses.update((id, segment), (false, newByte))
+            }
           }
-        }
-        // we assumed endSegmentId > startSegmentId
-        if (segment == endSegmentId) {
-          val segmentByte = result.slice((index(segment) - start).intValue, (end - start).intValue)
-          segmentStatuses.put((id, segment), (endSegmentFlag, segmentByte))
-        }
-        if (segment > startSegmentId && segment < endSegmentId) {
-//            test code
-//            if (id.name.equals("shuffle_0_0_0")) {
-//            print("startSegment------------->" + startSegmentId)
-//            print("segment------------->" + segment)
-//            print("endSegmentId------------->" + endSegmentId)
-//          }
-          val segmentByte = result.slice((index(segment) - start).intValue,
-            (index(segment + 1) - start).intValue())
-          segmentStatuses.put((id, segment), (true, segmentByte))
+          // we assumed endSegmentId > startSegmentId
+          if (segment == endSegmentId) {
+            val segmentByte = result.slice(
+              (index(segment) - start).intValue, (end - start).intValue)
+            segmentStatuses.put((id, segment), (endSegmentFlag, segmentByte))
+          }
+          if (segment > startSegmentId && segment < endSegmentId) {
+            //            test code
+            //            if (id.name.equals("shuffle_0_0_0")) {
+            //            print("startSegment------------->" + startSegmentId)
+            //            print("segment------------->" + segment)
+            //            print("endSegmentId------------->" + endSegmentId)
+            //          }
+            val segmentByte = result.slice((index(segment) - start).intValue,
+              (index(segment + 1) - start).intValue())
+            segmentStatuses.put((id, segment), (true, segmentByte))
+          }
         }
       }
     }
@@ -317,6 +332,9 @@ private[spark] class SortShuffleWriter[K, V, C](
               }
               segmentStatuses.remove((id, i))
               rifflePartitionLengths(i) += value.length
+              if (i == numPartitions - 1 && rifflePartitionLengths(i) == -1) {
+                rifflePartitionLengths(i) = 0
+              }
             }
           }
         }
