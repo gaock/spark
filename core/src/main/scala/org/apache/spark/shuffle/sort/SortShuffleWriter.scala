@@ -51,8 +51,8 @@ private[spark] class SortShuffleWriter[K, V, C](
   private var mapStatus: MapStatus = null
 
   private val writeMetrics = context.taskMetrics().shuffleWriteMetrics
-  private var blockIdRead = Map[ShuffleBlockId, (Long, Boolean, Array[Long])]()
-  private var readResult = Map[ShuffleBlockId, Array[Byte]]()
+  private val blockIdRead = new mutable.HashMap[ShuffleBlockId, (Long, Boolean, Array[Long])]()
+  private val readResult = new mutable.HashMap[ShuffleBlockId, Array[Byte]]()
   private val numPartitions = dep.partitioner.numPartitions
   private var partitionLengths = new Array[Long](numPartitions)
   private val rifflePartitionLengths = new Array[Long](numPartitions)
@@ -187,7 +187,7 @@ private[spark] class SortShuffleWriter[K, V, C](
   def getRiffleInfo(ids: Seq[ShuffleBlockId]) : Unit = {
     for (i <- ids) {
       val index = shuffleBlockResolver.getSegmentIndex(i)
-      blockIdRead += (i -> ((0L, false, index)))
+      blockIdRead.put(i, (0L, false, index))
     }
   }
   // Read blocks as fixed-size array[Byte]
@@ -198,8 +198,8 @@ private[spark] class SortShuffleWriter[K, V, C](
       if (info._2) {
         // Do not read this block
         // release byte buffer
-        blockIdRead -= id
-        readResult -= id
+        blockIdRead.remove(id)
+        readResult.remove(id)
       } else {
         // read this block
         val read = if (info._1 + readSize <= info._3.last) readSize else (info._3.last - info._1).intValue()
@@ -210,7 +210,7 @@ private[spark] class SortShuffleWriter[K, V, C](
         if (!readResult.contains(id)) {
           val byte = new Array[Byte](read)
           inputStream.read(byte)
-          readResult += (id -> byte)
+          readResult.put(id, byte)
           if (read < readSize) {
             flag = true
           }
@@ -218,15 +218,15 @@ private[spark] class SortShuffleWriter[K, V, C](
           if (read < readSize || info._1 + read == info._3.last) {
             val byte = new Array[Byte](read)
             inputStream.read(byte)
-            readResult += (id -> byte)
+            readResult.put(id, byte)
             flag = true
           } else {
             val byte = readResult(id)
             inputStream.read(byte)
-            readResult += (id -> byte)
+            readResult.put(id, byte)
           }
         }
-        blockIdRead += (id -> ((info._1 + readSize, flag, info._3)))
+        blockIdRead.put(id, (info._1 + readSize, flag, info._3))
       }
     }
   }
