@@ -245,6 +245,7 @@ private[spark] class HighlyCompressedMapStatus private (
       out.writeByte(kv._2)
     }
     if (hugeBlockSizes2 != null) {
+      out.writeBoolean(true)
       emptyBlocks2.writeExternal(out)
       out.writeLong(avgSize2)
       out.writeInt(hugeBlockSizes2.size)
@@ -254,8 +255,7 @@ private[spark] class HighlyCompressedMapStatus private (
       }
       out.writeObject(ids)
     } else {
-      new RoaringBitmap().writeExternal(out)
-      out.writeLong(-1)
+      out.writeBoolean(false)
     }
   }
 
@@ -273,20 +273,20 @@ private[spark] class HighlyCompressedMapStatus private (
     }
     hugeBlockSizes = hugeBlockSizesArray.toMap
 
-    emptyBlocks2 = new RoaringBitmap()
-    emptyBlocks2.readExternal(in)
-    avgSize2 = in.readLong()
-    if( avgSize2 != -1) {
+    if (in.readBoolean()) {
+      emptyBlocks2 = new RoaringBitmap()
+      emptyBlocks2.readExternal(in)
+      avgSize2 = in.readLong()
       val count2 = in.readInt()
       val hugeBlockSizesArray2 = mutable.ArrayBuffer[Tuple2[Int, Byte]]()
       (0 until count2).foreach { _ =>
         val block = in.readInt()
         val size = in.readByte()
         hugeBlockSizesArray2 += Tuple2(block, size)
+        }
+        hugeBlockSizes2 = hugeBlockSizesArray2.toMap
+        ids = in.readObject().asInstanceOf[Array[ShuffleBlockId]]
       }
-      hugeBlockSizes2 = hugeBlockSizesArray2.toMap
-      ids = in.readObject().asInstanceOf[Array[ShuffleBlockId]]
-    }
     else {
       numNonEmptyBlocks2 = -1
       emptyBlocks2 = null

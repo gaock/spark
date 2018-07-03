@@ -100,7 +100,8 @@ private[spark] class SortShuffleWriter[K, V, C](
       }
     }
     if (isUseRiffle) {
-      if (mapId == 9) {
+      // test
+      if ((mapId + 1) % riffleThreshold == 0) {
         val blockTest = blockManager.getMatchingBlockIds(_.isShuffleData)
         print("\n ----------block test---------------------------\n")
         for (id <- blockTest) {
@@ -108,12 +109,13 @@ private[spark] class SortShuffleWriter[K, V, C](
         }
         print("\n ----------block test---------------------------\n")
       }
+      // test
       rifflePartitionLengths(numPartitions - 1) = -1
-      val memoryManager = new RiffleMemoryManager
-        [(ShuffleBlockId, Int), (Boolean, Array[Byte])](context)
-      val acquireMemory = memoryManager.acquireMemory(50*1024*1024)
       val res = isRiffleMerge()
       if (res._1) {
+        val memoryManager = new RiffleMemoryManager
+          [(ShuffleBlockId, Int), (Boolean, Array[Byte])](context)
+        val acquireMemory = memoryManager.acquireMemory(50*1024*1024)
         logInfo(s"We'll start merge files****taskId=$mapId")
         getRiffleInfo(res._2)
         //  Use only one writer to write this riffle file
@@ -130,15 +132,18 @@ private[spark] class SortShuffleWriter[K, V, C](
         out.close()
         shuffleBlockResolver.writeRiffleIndexFileAndCommit(dep.shuffleId, mapId,
           rifflePartitionLengths, tmp)
+        // test
         print("\n-------------------rifflePartitionLength---------------------\n")
         rifflePartitionLengths.foreach(print)
+        // test
         mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths,
           rifflePartitionLengths, res._2.toArray)
+        memoryManager.freeMemory(acquireMemory)
       } else {
         logInfo(s"waiting threshold files***taskId=$mapId")
       }
-      memoryManager.freeMemory(acquireMemory)
-      if (mapId == 9) {
+      // test
+      if ((mapId + 1) % riffleThreshold == 0) {
         val blockTest = blockManager.getMatchingBlockIds(_.isShuffleData)
         print("\n ----------block test---------------------------\n")
         for (id <- blockTest) {
@@ -146,6 +151,7 @@ private[spark] class SortShuffleWriter[K, V, C](
         }
         print("\n ----------block test---------------------------\n")
       }
+      // test
     }
   }
 // success
@@ -156,8 +162,8 @@ private[spark] class SortShuffleWriter[K, V, C](
           blockManager.occupy
           val riffleBlocks = new ArrayBuffer[ShuffleBlockId]()
           val blockInfos = blockManager.getTaskResultInfos()
-          for ((shuffleBlockId, falg) <- blockInfos) {
-            if (!falg) {
+          for ((shuffleBlockId, flag) <- blockInfos) {
+            if (!flag) {
               riffleBlocks.append(shuffleBlockId)
             }
           }
@@ -293,7 +299,6 @@ private[spark] class SortShuffleWriter[K, V, C](
               segmentStatuses.update((id, segment), (false, newByte))
             }
           }
-          // we assumed endSegmentId > startSegmentId
           if (segment == endSegmentId) {
             val segmentByte = result.slice(
               (index(segment) - start).intValue, (end - start).intValue)
