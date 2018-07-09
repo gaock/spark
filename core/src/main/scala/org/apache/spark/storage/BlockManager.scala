@@ -130,17 +130,13 @@ private[spark] class BlockManager(
       !externalShuffleServiceEnabled || executorId == SparkContext.DRIVER_IDENTIFIER
     new DiskBlockManager(conf, deleteFilesOnStop)
   }
-  private var taskResultInfo: HashMap[ShuffleBlockId, Boolean]
-  = new HashMap[ShuffleBlockId, Boolean]()
-  def getTaskResultInfos() : HashMap[ShuffleBlockId, Boolean]
-  = this.taskResultInfo
-  def riffleReadSuccess(shuffleBlockId: ShuffleBlockId) : Unit = {
-      taskResultInfo.put(shuffleBlockId, true)
-  }
+  private var taskResultInfo: Set[ShuffleBlockId] = Set[ShuffleBlockId]()
+
+  def getTaskResultInfos() : Seq[ShuffleBlockId]
+  = this.taskResultInfo.toSeq
+  def deleteTaskResultInfo() : Unit = this.taskResultInfo = Set[ShuffleBlockId]()
   def insertTaskResultInfo(shuffleBlockId: ShuffleBlockId): Unit = {
-    if (!taskResultInfo.contains(shuffleBlockId)) {
-      taskResultInfo.put(shuffleBlockId, false)
-    }
+    taskResultInfo += shuffleBlockId
   }
 
   // Visible for testing

@@ -61,11 +61,7 @@ private[spark] object MapStatus {
   }
   def apply(loc: BlockManagerId, uncompressedSizes: Array[Long],
             riffleUncompressedSizes: Array[Long], ids: Array[ShuffleBlockId]) : MapStatus = {
-    if (uncompressedSizes.length + riffleUncompressedSizes.length  > 2000) {
-      HighlyCompressedMapStatus(loc, uncompressedSizes, riffleUncompressedSizes, ids)
-    } else {
       new CompressedMapStatus(loc, uncompressedSizes, riffleUncompressedSizes, ids)
-    }
   }
 
   private[this] val LOG_BASE = 1.1

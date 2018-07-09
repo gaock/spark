@@ -160,25 +160,15 @@ private[spark] class SortShuffleWriter[K, V, C](
       if (blockManager.status) {
         synchronized {
           blockManager.occupy
-          val riffleBlocks = new ArrayBuffer[ShuffleBlockId]()
           val blockInfos = blockManager.getTaskResultInfos()
-          for ((shuffleBlockId, flag) <- blockInfos) {
-            if (!flag) {
-              riffleBlocks.append(shuffleBlockId)
-            }
-          }
-          // insert itself
-          riffleBlocks.append(ShuffleBlockId(dep.shuffleId, mapId, 0))
           // check if blocks number > N (N-merge-way) or
           // this task is the last task at this stage.
-          if (riffleBlocks.length >= riffleThreshold ||
-            blockInfos.iterator.length == dep.partitioner.numPartitions - 1) {
-            for (id <- riffleBlocks) {
-              blockManager.riffleReadSuccess(id)
-            }
+          if (blockInfos.length >= riffleThreshold ||
+            blockInfos.length == dep.partitioner.numPartitions - 1) {
+            blockManager.deleteTaskResultInfo()
             blockManager.release
-            mergeBlocksLengths = riffleBlocks.length
-            return (true, riffleBlocks)
+            mergeBlocksLengths = blockInfos.length
+            return (true, blockInfos)
           } else {
             blockManager.release
             return (false, null.asInstanceOf[Seq[ShuffleBlockId]])
@@ -364,8 +354,10 @@ private[spark] class SortShuffleWriter[K, V, C](
       }
       stopping = true
       if (success) {
-        blockManager.insertTaskResultInfo(
-          ShuffleBlockId(dep.shuffleId, mapId, IndexShuffleBlockResolver.NOOP_REDUCE_ID))
+        if (mergeBlocksLengths != 0 ) {
+          blockManager.insertTaskResultInfo(
+            ShuffleBlockId(dep.shuffleId, mapId, IndexShuffleBlockResolver.NOOP_REDUCE_ID))
+        }
         Option(mapStatus)
       } else {
         None
