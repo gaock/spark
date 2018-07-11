@@ -100,16 +100,16 @@ private[spark] class SortShuffleWriter[K, V, C](
       }
     }
     if (isUseRiffle) {
-      // test
-      if ((mapId + 1) % riffleThreshold == 0) {
-        val blockTest = blockManager.getMatchingBlockIds(_.isShuffleData)
-        print("\n ----------block test---------------------------\n")
-        for (id <- blockTest) {
-          print("\n" + id.name)
-        }
-        print("\n ----------block test---------------------------\n")
-      }
-      // test
+//      // test
+//      if ((mapId + 1) % riffleThreshold == 0) {
+//        val blockTest = blockManager.getMatchingBlockIds(_.isShuffleData)
+//        print("\n ----------block test---------------------------\n")
+//        for (id <- blockTest) {
+//          print("\n" + id.name)
+//        }
+//        print("\n ----------block test---------------------------\n")
+//      }
+//      // test
       rifflePartitionLengths(numPartitions - 1) = -1
       val res = isRiffleMerge()
       if (res._1) {
@@ -132,26 +132,22 @@ private[spark] class SortShuffleWriter[K, V, C](
         out.close()
         shuffleBlockResolver.writeRiffleIndexFileAndCommit(dep.shuffleId, mapId,
           rifflePartitionLengths, tmp)
-        // test
-        print("\n-------------------rifflePartitionLength---------------------\n")
-        rifflePartitionLengths.foreach(print)
-        // test
         mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths,
           rifflePartitionLengths, res._2.toArray)
         memoryManager.freeMemory(acquireMemory)
       } else {
         logInfo(s"waiting threshold files***taskId=$mapId")
       }
-      // test
-      if ((mapId + 1) % riffleThreshold == 0) {
-        val blockTest = blockManager.getMatchingBlockIds(_.isShuffleData)
-        print("\n ----------block test---------------------------\n")
-        for (id <- blockTest) {
-          print("\n" + id.name)
-        }
-        print("\n ----------block test---------------------------\n")
-      }
-      // test
+//      // test
+//      if ((mapId + 1) % riffleThreshold == 0) {
+//        val blockTest = blockManager.getMatchingBlockIds(_.isShuffleData)
+//        print("\n ----------block test---------------------------\n")
+//        for (id <- blockTest) {
+//          print("\n" + id.name)
+//        }
+//        print("\n ----------block test---------------------------\n")
+//      }
+//      // test
     }
   }
 // success
@@ -163,6 +159,7 @@ private[spark] class SortShuffleWriter[K, V, C](
           val blockInfos = blockManager.getTaskResultInfos()
           // check if blocks number > N (N-merge-way) or
           // this task is the last task at this stage.
+          // May error.
           if (blockInfos.length >= riffleThreshold ||
             blockInfos.length == dep.partitioner.numPartitions - 1) {
             blockManager.deleteTaskResultInfo()
@@ -322,8 +319,8 @@ private[spark] class SortShuffleWriter[K, V, C](
               val value = segmentStatuses((id, i))._2
               if (value.length != 0) {
                 writer.write(value, 0, value.length)
-                print("\n****write**** id = " +id.name +
-                  " segment = " + i + " length = " + value.length)
+//                print("\n****write**** id = " +id.name +
+//                  " segment = " + i + " length = " + value.length)
               }
               segmentStatuses.remove((id, i))
               rifflePartitionLengths(i) += value.length
@@ -354,7 +351,7 @@ private[spark] class SortShuffleWriter[K, V, C](
       }
       stopping = true
       if (success) {
-        if (mergeBlocksLengths != 0 ) {
+        if (mergeBlocksLengths == 0 ) {
           blockManager.insertTaskResultInfo(
             ShuffleBlockId(dep.shuffleId, mapId, IndexShuffleBlockResolver.NOOP_REDUCE_ID))
         }
