@@ -60,6 +60,8 @@ class BlockManagerSlaveEndpoint(
         }
         SparkEnv.get.shuffleManager.unregisterShuffle(shuffleId)
       }
+    case FetchThemisBlock(blockManagerId, blockId, index) =>
+      context.reply(blockManager.fetchThmisBlock(blockManagerId, blockId, index))
 
     case RemoveBroadcast(broadcastId, _) =>
       doAsync[Int]("removing broadcast " + broadcastId, context) {

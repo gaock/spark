@@ -113,6 +113,9 @@ class BlockManagerMasterEndpoint(
     case RemoveShuffle(shuffleId) =>
       context.reply(removeShuffle(shuffleId))
 
+    case ReportMasterTaskFinished(blockManagerId, blockId, index) =>
+      context.reply(reportThemisBlock(blockManagerId, blockId, index))
+
     case RemoveBroadcast(broadcastId, removeFromDriver) =>
       context.reply(removeBroadcast(broadcastId, removeFromDriver))
 
@@ -179,6 +182,15 @@ class BlockManagerMasterEndpoint(
     Future.sequence(
       blockManagerInfo.values.map { bm =>
         bm.slaveEndpoint.ask[Boolean](removeMsg)
+      }.toSeq
+    )
+  }
+  private def reportThemisBlock(blockManagerId: BlockManagerId,
+                                blockId: BlockId, index: Array[Long]) : Future[Seq[Boolean]] = {
+    val themisMeg = FetchThemisBlock(blockManagerId, blockId, index)
+    Future.sequence(
+      blockManagerInfo.values.map { bm =>
+        bm.slaveEndpoint.ask(themisMeg)
       }.toSeq
     )
   }

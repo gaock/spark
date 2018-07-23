@@ -45,7 +45,9 @@ private[spark] object BlockManagerMessages {
   // Remove all blocks belonging to a specific broadcast.
   case class RemoveBroadcast(broadcastId: Long, removeFromDriver: Boolean = true)
     extends ToBlockManagerSlave
-
+  // Report all block manager slaves to do themis
+  case class ReportThemisBlock(blockManagerId: BlockManagerId, blockId: BlockId, index: Array[Long])
+    extends ToBlockManagerSlave
   /**
    * Driver to Executor message to trigger a thread dump.
    */
@@ -123,4 +125,13 @@ private[spark] object BlockManagerMessages {
   case class BlockManagerHeartbeat(blockManagerId: BlockManagerId) extends ToBlockManagerMaster
 
   case class HasCachedBlocks(executorId: String) extends ToBlockManagerMaster
+  case class ReportMasterTaskFinished(
+     blockManagerId: BlockManagerId,
+     blockId: BlockId,
+     index: Array[Long])
+    extends ToBlockManagerMaster
+  case class FetchThemisBlock(blockManagerId: BlockManagerId,
+                              blockId: BlockId,
+                              index: Array[Long])
+    extends ToBlockManagerMaster
 }

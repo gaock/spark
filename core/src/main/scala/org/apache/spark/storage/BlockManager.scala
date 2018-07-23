@@ -261,6 +261,18 @@ private[spark] class BlockManager(
     logInfo(s"Initialized BlockManager: $blockManagerId")
   }
 
+  /**
+    * fetch the finished(themis) block to this blockManager
+    * the fetch specific chunks rely on blockMangerId and index.
+    * @return Boolean fetch themis block success or failed
+    */
+  def fetchThmisBlock(
+      blockManagerId: BlockManagerId,
+      blockId: BlockId,
+      index: Array[Long]): Boolean = {
+
+  }
+
   def shuffleMetricsSource: Source = {
     import BlockManager._
 
