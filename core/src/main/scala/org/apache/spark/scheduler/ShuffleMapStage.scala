@@ -59,6 +59,7 @@ private[spark] class ShuffleMapStage(
    * will always be a subset of the partitions that the TaskSetManager thinks are pending).
    */
   val pendingPartitions = new HashSet[Int]
+  val mergePartitions = new HashSet[Int]
 
   /**
    * List of [[MapStatus]] for each partition. The index of the array is the map partition id,

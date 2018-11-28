@@ -150,6 +150,14 @@ private[spark] class SortShuffleWriter[K, V, C](
 //      // test
     }
   }
+
+  override def mergeBlocks(shuffleBlockIds: Array[ShuffleBlockId]): Unit = {
+    // If the blocks length is empty. It must some error happened.
+    print("Now , we are in SortShuffleWriter class and I will start merging blocks\n")
+    if (shuffleBlockIds.length == 0) return
+    // I'll write this code next time.
+
+  }
 // success
   def isRiffleMerge(): (Boolean, Seq[ShuffleBlockId]) = {
     while (true) {
@@ -162,7 +170,7 @@ private[spark] class SortShuffleWriter[K, V, C](
           // May error.
           if (blockInfos.length >= riffleThreshold ||
             blockInfos.length == dep.partitioner.numPartitions - 1) {
-            blockManager.deleteTaskResultInfo()
+            blockManager.deleteTaskResultInfo
             blockManager.release
             mergeBlocksLengths = blockInfos.length
             return (true, blockInfos)

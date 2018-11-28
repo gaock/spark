@@ -233,6 +233,13 @@ private[spark] class TaskSetManager(
 
     allPendingTasks += index  // No point scanning this whole list to find the old task there
   }
+  private def addTask(task: ShuffleMapTask): Unit = {
+    if (!taskSet.tasks(0).isInstanceOf[ShuffleMapTask]) {
+      logError("Error in add Task && the task is not Shuffle Map task")
+    }
+    taskSet.addTask(task)
+    addPendingTask(tasks.last)
+  }
 
   /**
    * Return the pending tasks list for a given executor ID, or an empty list if

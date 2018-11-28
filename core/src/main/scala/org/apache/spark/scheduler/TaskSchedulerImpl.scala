@@ -186,11 +186,13 @@ private[spark] class TaskSchedulerImpl private[scheduler](
     waitBackendReady()
   }
 
+  var taskSetMangerT: TaskSetManager = null
   override def submitTasks(taskSet: TaskSet) {
     val tasks = taskSet.tasks
     logInfo("Adding task set " + taskSet.id + " with " + tasks.length + " tasks")
     this.synchronized {
       val manager = createTaskSetManager(taskSet, maxTaskFailures)
+      taskSetMangerT = manager
       val stage = taskSet.stageId
       val stageTaskSets =
         taskSetsByStageIdAndAttempt.getOrElseUpdate(stage, new HashMap[Int, TaskSetManager])
@@ -221,6 +223,8 @@ private[spark] class TaskSchedulerImpl private[scheduler](
     }
     backend.reviveOffers()
   }
+
+  override def getTaskSetManager: TaskSetManager = taskSetMangerT
 
   // Label as private[scheduler] to allow tests to swap in different task set managers if necessary
   private[scheduler] def createTaskSetManager(

@@ -414,7 +414,7 @@ final class ShuffleBlockFetcherIterator(
           // block is small (the decompressed block is smaller than maxBytesInFlight)
           if (detectCorrupt && !input.eq(in) && size < maxBytesInFlight / 3) {
             val originalInput = input
-            val out = new ChunkedByteBufferOutputStream(64 * 1024, ByteBuffer.allocate)
+                    val out = new ChunkedByteBufferOutputStream(64 * 1024, ByteBuffer.allocate)
             try {
               // Decompress the whole block at once to detect any corruption, which could increase
               // the memory usage tne potential increase the chance of OOM.

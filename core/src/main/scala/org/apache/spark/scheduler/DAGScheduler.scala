@@ -18,20 +18,19 @@
 package org.apache.spark.scheduler
 
 import java.io.NotSerializableException
+import java.util
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 import scala.annotation.tailrec
-import scala.collection.Map
+import scala.collection.{Map, mutable}
 import scala.collection.mutable.{HashMap, HashSet, Stack}
 import scala.concurrent.duration._
 import scala.language.existentials
 import scala.language.postfixOps
 import scala.util.control.NonFatal
-
 import org.apache.commons.lang3.SerializationUtils
-
 import org.apache.spark._
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.executor.TaskMetrics
@@ -160,7 +159,7 @@ class DAGScheduler(
   private[scheduler] val failedStages = new HashSet[Stage]
 
   private[scheduler] val activeJobs = new HashSet[ActiveJob]
-
+  private val riffleThreshold = SparkEnv.get.conf.getInt("spark.conf.riffleThreshold", 40)
   /**
    * Contains the locations that each RDD's partitions are cached on.  This map's keys are RDD ids
    * and its values are arrays indexed by partition numbers. Each array value is the set of
@@ -183,6 +182,9 @@ class DAGScheduler(
   // A closure serializer that we reuse.
   // This is only safe because DAGScheduler runs in a single thread.
   private val closureSerializer = SparkEnv.get.closureSerializer.newInstance()
+  private var serializedTaskMetricsT: Array[Byte] = null
+  private var jobIdT: Int = 0
+  private var mergePart: Int = 0
 
   /** If enabled, FetchFailed will not cause stage retry, in order to surface the problem. */
   private val disallowStageRetryForTest = sc.getConf.getBoolean("spark.test.noStageRetry", false)
@@ -940,6 +942,7 @@ class DAGScheduler(
     }
   }
 
+  var taskBinaryT: Broadcast[Array[Byte]] = null
   /** Called when stage's parents are available and we can now do its task. */
   private def submitMissingTasks(stage: Stage, jobId: Int) {
     logDebug("submitMissingTasks(" + stage + ")")
@@ -947,6 +950,7 @@ class DAGScheduler(
     // First figure out the indexes of partition ids to compute.
     val partitionsToCompute: Seq[Int] = stage.findMissingPartitions()
 
+    jobIdT = jobId
     // Use the scheduling pool, job group, description, etc. from an ActiveJob associated
     // with this Stage
     val properties = jobIdToActiveJob(jobId).properties
@@ -1004,6 +1008,7 @@ class DAGScheduler(
       }
 
       taskBinary = sc.broadcast(taskBinaryBytes)
+      taskBinaryT = taskBinary
     } catch {
       // In the case of a failure during serialization, abort the stage.
       case e: NotSerializableException =>
@@ -1020,6 +1025,7 @@ class DAGScheduler(
 
     val tasks: Seq[Task[_]] = try {
       val serializedTaskMetrics = closureSerializer.serialize(stage.latestInfo.taskMetrics).array()
+      serializedTaskMetricsT = serializedTaskMetrics
       stage match {
         case stage: ShuffleMapStage =>
           stage.pendingPartitions.clear()
@@ -1130,6 +1136,16 @@ class DAGScheduler(
       Utils.getFormattedClassName(event.task), event.reason, event.taskInfo, taskMetrics))
   }
 
+  // HashMap[ExecutorId, Array[ShuffleBlockId]
+  // it's  used to record the blocks which don't be merged.
+  private var taskFinishedStatistics: mutable.HashMap[String, util.ArrayList[Int]] = new mutable.HashMap[String, util.ArrayList[Int]]()
+  // it's used to record the blocks which have been merged.
+  private var taskMergeInfo: mutable.HashMap[String, HashMap[ShuffleBlockId, Array[ShuffleBlockId]]] =
+    new mutable.HashMap[String, HashMap[ShuffleBlockId, Array[ShuffleBlockId]]]()
+  private var mergeTasksFinished: mutable.HashMap[Int, Array[Int]] =
+    new mutable.HashMap[Int, Array[Int]]()
+  private var runningMergeTasks: mutable.HashMap[Int, Array[Int]] =
+    new mutable.HashMap[Int, Array[Int]]()
   /**
    * Responds to a task finishing. This is called inside the event loop so it assumes that it can
    * modify the scheduler's internal state. Use taskEnded() to post a task end event from outside.
@@ -1213,8 +1229,22 @@ class DAGScheduler(
           case smt: ShuffleMapTask =>
             val shuffleStage = stage.asInstanceOf[ShuffleMapStage]
             val status = event.result.asInstanceOf[MapStatus]
+            val host = status.location.host
+            val mapId = task.partitionId
             val execId = status.location.executorId
             logDebug("ShuffleMapTask finished on " + execId)
+            // delete the tasks which have been merged if this task is merge task.
+            // add the finished task if it isn't the merge task.
+            if (task.asInstanceOf[ShuffleMapTask].isMergeBlocks) {
+            if (!mergeTasksFinished.contains(task.partitionId)) {
+              mergeTasksFinished.put(task.partitionId,
+                task.asInstanceOf[ShuffleMapTask].getMergeBlocks)
+            }
+            else {
+              // This task has been repeated and finished.
+              // It don't need to do anything.
+            }
+          }
             if (stageIdToStage(task.stageId).latestInfo.attemptId == task.stageAttemptId) {
               // This task was for the currently running attempt of the stage. Since the task
               // completed successfully from the perspective of the TaskSetManager, mark it as
@@ -1238,6 +1268,35 @@ class DAGScheduler(
               // copy of each task has finished successfully, even if the currently active stage
               // still has tasks running.
               shuffleStage.pendingPartitions -= task.partitionId
+//               将已经完成的任务统计到taskFinishedStatistics
+              if (!taskFinishedStatistics.contains(host)) {
+                taskFinishedStatistics.put(host, new util.ArrayList[Int]())
+              }
+                taskFinishedStatistics(host).add(task.partitionId)
+              // 判断是否为任务合并上限
+              for ((host, partitionList) <- taskFinishedStatistics) {
+                if (partitionList.toArray().length >= riffleThreshold) {
+                  // 新建任务来合并这些任务
+                  mergePart -= 1
+                  val properties = jobIdToActiveJob(jobIdT).properties
+                  val loc: TaskLocation = TaskLocation(host, execId)
+                  var locs: Seq[TaskLocation] = Seq[TaskLocation]()
+                  locs = locs :+ loc
+                  val shuffleTask = new ShuffleMapTask(
+                    stage.id,
+                    stage.latestInfo.attemptId,
+                    taskBinaryT,
+                    new Partition {override def index: Int = mergePart},
+                    locs,
+                    properties,
+                    serializedTaskMetricsT,
+                    Option(jobIdT),
+                    Option(sc.applicationId),
+                    sc.applicationAttemptId)
+                  shuffleStage.pendingPartitions.add(mergePart)
+
+                }
+              }
             }
 
             if (runningStages.contains(shuffleStage) && shuffleStage.pendingPartitions.isEmpty) {

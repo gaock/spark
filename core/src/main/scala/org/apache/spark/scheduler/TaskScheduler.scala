@@ -51,6 +51,7 @@ private[spark] trait TaskScheduler {
   // Submit a sequence of tasks to run.
   def submitTasks(taskSet: TaskSet): Unit
 
+  def getTaskSetManager: TaskSetManager
   // Cancel a stage.
   def cancelTasks(stageId: Int, interruptThread: Boolean): Unit
 
@@ -95,5 +96,7 @@ private[spark] trait TaskScheduler {
    * @return An application's Attempt ID
    */
   def applicationAttemptId(): Option[String]
+
+
 
 }

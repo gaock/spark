@@ -21,6 +21,7 @@ import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.Properties
 
+import scala.collection.mutable.ArrayBuffer
 import scala.language.existentials
 
 import org.apache.spark._
@@ -28,6 +29,9 @@ import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.shuffle.ShuffleWriter
+import org.apache.spark.storage.ShuffleBlockId
+
+
 
 /**
  * A ShuffleMapTask divides the elements of an RDD into multiple buckets (based on a partitioner
@@ -74,8 +78,23 @@ private[spark] class ShuffleMapTask(
     if (locs == null) Nil else locs.toSet.toSeq
   }
 
+  val mergeBlockIds = new ArrayBuffer[Int]()
+  def setMergeBlockIds(ids: Array[Int]): Unit = {
+    for (id <- ids) {
+      mergeBlockIds.append(id)
+    }
+  }
+  private var executor: String = null
+  def getShuffleBlockId : Int = partition.index
+  def setExecutor(e: String): Unit = {
+    executor = e
+  }
+  def getExecutor: String = executor
+  def isMergeBlocks : Boolean = mergeBlockIds.nonEmpty
+  def getMergeBlocks: Array[Int] = mergeBlockIds.toArray
   override def runTask(context: TaskContext): MapStatus = {
-    // Deserialize the RDD using the broadcast variable.
+    // merge Blocks using this task named mergeTask
+    // Or Deserialize the RDD using the broadcast variable.
     val threadMXBean = ManagementFactory.getThreadMXBean
     val deserializeStartTime = System.currentTimeMillis()
     val deserializeStartCpuTime = if (threadMXBean.isCurrentThreadCpuTimeSupported) {
@@ -93,7 +112,12 @@ private[spark] class ShuffleMapTask(
     try {
       val manager = SparkEnv.get.shuffleManager
       writer = manager.getWriter[Any, Any](dep.shuffleHandle, partitionId, context)
-      writer.write(rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any, Any]]])
+      if (isMergeBlocks) {
+        writer.mergeBlocks(getMergeBlocks)
+      } else {
+        writer.write(rdd.iterator(partition, context)
+          .asInstanceOf[Iterator[_ <: Product2[Any, Any]]])
+      }
       writer.stop(success = true).get
     } catch {
       case e: Exception =>
