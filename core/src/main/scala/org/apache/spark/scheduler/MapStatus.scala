@@ -45,7 +45,12 @@ private[spark] sealed trait MapStatus {
    * necessary for correctness, since block fetchers are allowed to skip zero-size blocks.
    */
   def getSizeForBlock(reduceId: Int): Long
-  def getShuffleBlockIds(): Array[ShuffleBlockId]
+
+  def getShuffleBlockIds: Array[ShuffleBlockId]
+
+  def toRiffleMapStatus(id: ShuffleBlockId) : Unit
+
+  def toMapStatus : Unit
 
 }
 
@@ -104,9 +109,8 @@ private[spark] object MapStatus {
 private[spark] class CompressedMapStatus(
     private[this] var loc: BlockManagerId,
     private[this] var compressedSizes: Array[Byte],
-    private[this] var riffleCompressedSizes: Array[Byte] = null.asInstanceOf[Array[Byte]],
-    private[this] var riffleBlockIds: Array[ShuffleBlockId] =
-    null.asInstanceOf[Array[ShuffleBlockId]])
+    private[this] var riffleCompressedSizes: Array[Byte] = null,
+    private[this] var riffleBlockIds: Array[ShuffleBlockId] = null)
   extends MapStatus with Externalizable {
 
   protected def this() = this(null, null.asInstanceOf[Array[Byte]])
@@ -136,8 +140,23 @@ private[spark] class CompressedMapStatus(
     MapStatus.decompressSize(riffleCompressedSizes(reduceId))
   }
 
-  override def getShuffleBlockIds(): Array[ShuffleBlockId] = {
+  override def getShuffleBlockIds: Array[ShuffleBlockId] = {
     riffleBlockIds
+  }
+
+  override def toRiffleMapStatus(id: ShuffleBlockId): Unit = {
+    this.loc = loc
+    this.compressedSizes = compressedSizes
+    this.riffleCompressedSizes = compressedSizes
+    this.riffleBlockIds = Array(id)
+
+  }
+
+  override def toMapStatus: Unit = {
+    this.loc = loc
+    this.compressedSizes = compressedSizes
+    this.riffleCompressedSizes = null
+    this.riffleBlockIds = null
   }
 
   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {
@@ -228,8 +247,12 @@ private[spark] class HighlyCompressedMapStatus private (
   }
 
   override def getShuffleBlockIds(): Array[ShuffleBlockId] = {
-    return ids
+    this.ids
   }
+  // We'll never use these functions.
+  override def toRiffleMapStatus(id: ShuffleBlockId): Unit = {}
+
+  override def toMapStatus: Unit = {}
 
   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {
     loc.writeExternal(out)

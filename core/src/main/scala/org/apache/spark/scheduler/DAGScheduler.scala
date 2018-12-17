@@ -1257,6 +1257,7 @@ class DAGScheduler(
                 shuffleStage.shuffleDep.shuffleId,
                 shuffleStage.outputLocInMapOutputTrackerFormat(),
                 changeEpoch = true)
+              blockManagerMaster.removeBlock()e
 
               clearCacheLocs()
 
