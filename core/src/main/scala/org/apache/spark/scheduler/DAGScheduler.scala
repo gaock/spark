@@ -1253,11 +1253,20 @@ class DAGScheduler(
               // epoch incremented to refetch them.
               // TODO: Only increment the epoch number if this is not the first time
               //       we registered these map outputs.
-              mapOutputTracker.registerMapOutputs(
-                shuffleStage.shuffleDep.shuffleId,
-                shuffleStage.outputLocInMapOutputTrackerFormat(),
-                changeEpoch = true)
-              blockManagerMaster.removeBlock()e
+
+              if (SparkEnv.get.conf.getBoolean("spark.conf.isUseRiffle", false)) {
+                val errorBlocks = mapOutputTracker.registerMapOutputs(
+                  shuffleStage.shuffleDep.shuffleId,
+                  shuffleStage.outputLocInMapOutputTrackerFormat(),
+                  changeEpoch = true, true)
+                errorBlocks.foreach(num => blockManagerMaster.
+                  removeBlock(ShuffleBlockId(shuffleStage.id, num, 100).asInstanceOf[BlockId]))
+              }
+              else {
+                mapOutputTracker.registerMapOutputs(shuffleStage.shuffleDep.shuffleId,
+                  shuffleStage.outputLocInMapOutputTrackerFormat(),
+                  changeEpoch = true)
+              }
 
               clearCacheLocs()
 

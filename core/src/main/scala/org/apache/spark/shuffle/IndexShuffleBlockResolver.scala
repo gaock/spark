@@ -61,10 +61,14 @@ private[spark] class IndexShuffleBlockResolver(
     blockManager.diskBlockManager.getFile(ShuffleIndexBlockId(shuffleId, mapId, NOOP_REDUCE_ID))
   }
   private def getRiffleIndexFile(shuffleId: Int, mapId: Int): File = {
-    blockManager.diskBlockManager.getFile(ShuffleIndexBlockId(shuffleId, mapId, 100))
+    val index = blockManager.diskBlockManager.getFile(ShuffleIndexBlockId(shuffleId, mapId, 100))
+    if(index.exists()) index
+    else blockManager.diskBlockManager.getFile(ShuffleIndexBlockId(shuffleId, mapId, 0))
   }
   def getRiffleDataFile(shuffleId: Int, mapId: Int): File = {
-    blockManager.diskBlockManager.getFile(ShuffleDataBlockId(shuffleId, mapId, 100))
+    val data = blockManager.diskBlockManager.getFile(ShuffleDataBlockId(shuffleId, mapId, 100))
+    if(data.exists()) data
+    else blockManager.diskBlockManager.getFile(ShuffleDataBlockId(shuffleId, mapId, 0))
   }
 
   /**

@@ -385,82 +385,43 @@ private[spark] class MapOutputTrackerMaster(conf: SparkConf,
   }
 
   /** Register multiple map output information for the given shuffle */
-  def registerMapOutputs(shuffleId: Int, statuses: Array[MapStatus], changeEpoch: Boolean = false) {
-    val allSet = statuses.indices.toSet[Int]
-
-    val wrongSet1 = mutable.Set[Int]()
-    val wrongSet2 = mutable.Set[Int]()
-
-    val uesedSet = mutable.Set[Int]()
-    val riffleSet = mutable.Set[Int]()
-    val mergeSet = mutable.Set[Int]()
-    val singleSet = mutable.Set[Int]()
+  def registerMapOutputs(shuffleId: Int, statuses: Array[MapStatus],
+                         changeEpoch: Boolean = false, isRiffle: Boolean = false) : Array[Int] = {
+    val allSet = statuses.clone.indices.toSet[Int]
+    val usedSet = mutable.Set[Int]()
     val riffleToSingleSet = mutable.Set[Int]()
     val riffleToMapSet = mutable.Set[Int]()
-    val mapToSingleSet = mutable.Set[Int]()
-    val riffleInfo = new mutable.HashMap[Int, Array[Int]]()
-//    for ((mapstatus, id) <- statuses.zipWithIndex; if mapstatus.getShuffleBlockIds != null) {
-//      riffleSet.add(id)
-//      riffleInfo.put(id, mapstatus.getShuffleBlockIds.map(_.mapId))
-//    }
-//    for ((riffleId, mergeIds) <- riffleInfo) {
-//      if (mergeSet.contains(riffleId)) riffleToMapSet.add(riffleId)
-//      for (mergeId <- mergeIds) {
-//        if (mergeSet.contains(mergeId)) {
-//          riff
-//        }
-//      }
-//    }
-//
-//
-//
-//
-//    for ((mapstatus, id) <- statuses.zipWithIndex) {
-//      val mergeBlocks = mapstatus.getShuffleBlockIds
-//      if (uesedSet.contains(id)) {
-//        if (mergeBlocks == null) {
-//          uesedSet
-//        }
-//      }
-//      if (!mergeSet.contains(id)) {
-//        if (mergeBlocks == null) singleSet.add(id)
-//        else {
-//          val singleMerge = mergeBlocks.map(_.mapId).toSet[Int]
-//          // 可能一个文件被合并多遍, 那么这整个的合并的ids全部拿出.
-//          var flag = true
-//          for (s <- singleMerge if mergeSet.contains(s)
-//               if wrongSet1.contains(s); if wrongSet2.contains(s)) {
-//            if (s == id) wrongSet2.add(id) else wrongSet1.add(id)
-//            flag = false
-//          }
-//          // 所有的文件都是第一次被合并.
-//          if(flag) mergeSet ++= singleMerge
-//        }
-//      }
-//      if (mergeBlocks != null) {
-//
-//      } else mapToSingleSet.add(id)
-//
-//      uesedSet.add(id)
-//    }
-//    // 剩下的是没有被合并过的
-//    val restStatus = allSet -- mergeSet -- wrongSet1 -- wrongSet2
-//    // 需要区分是没有被合并的或者合并错误的
-//    // 1. 1->1,2,3,4,5 && 6 -> 2,6,7,8,9 需要将6由RiffleStatus->mergeStatus----how？
-//    // 2. 1->1,2,3,4,5 && 2 -> 2,6,7,8,9 需要将2由RiffleStatus->mapStatus
-//    // 合并的文件名是shuffleId + mapId + 100
-//    // 原始的文件名是shuffleId + mapId + 0
-//    restStatus.foreach(num => statuses(num).
-//      toRiffleMapStatus(ShuffleBlockId(shuffleId, num, 0)))
-//    wrongSet2.foreach(statuses(_).toMapStatus)
+    val errorInfo = new mutable.HashMap[Int, Array[Int]]()
 
-    val restSet = allSet -- mergeSet -- riffleSet
+    for ((mapstatus, id) <- statuses.zipWithIndex; if mapstatus.getShuffleBlockIds != null) {
+      val merge = mapstatus.getShuffleBlockIds.map(_.mapId).toSet
+      if ((usedSet & merge).isEmpty) {
+        usedSet ++= merge
+      } else {
+        errorInfo.put(id, merge.toArray)
+      }
+    }
+    for ((riffleId, _) <- errorInfo) {
+      if (usedSet.contains(riffleId)) {
+        riffleToMapSet.add(riffleId)
+      }
+      else riffleToSingleSet.add(riffleId)
+    }
+    val restSet = allSet -- usedSet --riffleToMapSet
+    restSet.foreach(num => statuses(num).toRiffleMapStatus(ShuffleBlockId(shuffleId, num, 0)))
+    riffleToMapSet.foreach(num => statuses(num).toMapStatus)
+
     mapStatuses.put(shuffleId, statuses.clone())
     if (changeEpoch) {
       incrementEpoch()
     }
-    riffleToSingleSet
-
+    riffleToSingleSet.toArray
+  }
+  def registerMapOutputs(shuffleId: Int, statuses: Array[MapStatus], changeEpoch: Boolean = false) {
+    mapStatuses.put(shuffleId, statuses.clone())
+    if (changeEpoch) {
+      incrementEpoch()
+    }
   }
 
   /** Unregister map output information of the given shuffle, mapper and block manager */

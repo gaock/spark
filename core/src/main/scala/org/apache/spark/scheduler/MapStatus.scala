@@ -149,7 +149,6 @@ private[spark] class CompressedMapStatus(
     this.compressedSizes = compressedSizes
     this.riffleCompressedSizes = compressedSizes
     this.riffleBlockIds = Array(id)
-
   }
 
   override def toMapStatus: Unit = {
