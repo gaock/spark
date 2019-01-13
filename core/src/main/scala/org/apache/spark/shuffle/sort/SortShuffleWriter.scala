@@ -345,6 +345,9 @@ private[spark] class SortShuffleWriter[K, V, C](
 
   /** Close this writer, passing along whether the map completed */
   override def stop(success: Boolean): Option[MapStatus] = {
+    // scalastyle:off
+    println("write 结束")
+    // off
     try {
       if (stopping) {
         return None

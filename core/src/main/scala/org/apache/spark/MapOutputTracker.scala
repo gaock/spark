@@ -387,6 +387,13 @@ private[spark] class MapOutputTrackerMaster(conf: SparkConf,
   /** Register multiple map output information for the given shuffle */
   def registerMapOutputs(shuffleId: Int, statuses: Array[MapStatus],
                          changeEpoch: Boolean = false, isRiffle: Boolean = false) : Array[Int] = {
+    if (!isRiffle) {
+      mapStatuses.put(shuffleId, statuses.clone())
+      if (changeEpoch) {
+        incrementEpoch()
+      }
+      return null
+    }
     val allSet = statuses.clone.indices.toSet[Int]
     val usedSet = mutable.Set[Int]()
     val riffleToSingleSet = mutable.Set[Int]()
@@ -416,12 +423,6 @@ private[spark] class MapOutputTrackerMaster(conf: SparkConf,
       incrementEpoch()
     }
     riffleToSingleSet.toArray
-  }
-  def registerMapOutputs(shuffleId: Int, statuses: Array[MapStatus], changeEpoch: Boolean = false) {
-    mapStatuses.put(shuffleId, statuses.clone())
-    if (changeEpoch) {
-      incrementEpoch()
-    }
   }
 
   /** Unregister map output information of the given shuffle, mapper and block manager */

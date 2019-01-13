@@ -1052,6 +1052,9 @@ class DAGScheduler(
     if (tasks.size > 0) {
       logInfo(s"Submitting ${tasks.size} missing tasks from $stage (${stage.rdd}) (first 15 " +
         s"tasks are for partitions ${tasks.take(15).map(_.partitionId)})")
+      // scalastyle:off
+      println("提交task")
+      // off
       taskScheduler.submitTasks(new TaskSet(
         tasks.toArray, stage.id, stage.latestInfo.attemptId, jobId, properties))
       stage.latestInfo.submissionTime = Some(clock.getTimeMillis())
@@ -1211,6 +1214,9 @@ class DAGScheduler(
             }
 
           case smt: ShuffleMapTask =>
+            // scalastyle:off
+            println("ShuffleMapTask finished")
+            // scalastyle:on
             val shuffleStage = stage.asInstanceOf[ShuffleMapStage]
             val status = event.result.asInstanceOf[MapStatus]
             val execId = status.location.executorId
@@ -1255,6 +1261,9 @@ class DAGScheduler(
               //       we registered these map outputs.
 
               if (SparkEnv.get.conf.getBoolean("spark.conf.isUseRiffle", false)) {
+                // scalastyle:off
+                println("registerMapOutputs")
+                // off
                 val errorBlocks = mapOutputTracker.registerMapOutputs(
                   shuffleStage.shuffleDep.shuffleId,
                   shuffleStage.outputLocInMapOutputTrackerFormat(),
