@@ -242,6 +242,8 @@ private[spark] class Executor(
       private val taskDescription: TaskDescription)
     extends Runnable {
 
+    val conf = SparkEnv.get.conf
+    val errorRate = conf.getDouble("spark.errorRate", 0)
     val taskId = taskDescription.taskId
     val threadName = s"Executor task launch worker for task $taskId"
     private val taskName = taskDescription.name
@@ -325,6 +327,10 @@ private[spark] class Executor(
 
         // If this task has been killed before we deserialized it, let's quit now. Otherwise,
         // continue executing the task.
+        val num = System.currentTimeMillis() % 10 * 10 + System.currentTimeMillis() % 10
+        if(num < errorRate * 100) {
+          killTask(taskDescription.taskId, true, "riffle error rate test")
+        }
         val killReason = reasonIfKilled
         if (killReason.isDefined) {
           // Throw an exception rather than returning, because returning within a try{} block
