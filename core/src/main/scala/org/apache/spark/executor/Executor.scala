@@ -243,7 +243,7 @@ private[spark] class Executor(
     extends Runnable {
 
     val conf = SparkEnv.get.conf
-    val errorRate = conf.getDouble("spark.errorRate", 0)
+    val errorRate = conf.getDouble("spark.conf.errorRate", 0)
     val taskId = taskDescription.taskId
     val threadName = s"Executor task launch worker for task $taskId"
     private val taskName = taskDescription.name
@@ -330,6 +330,9 @@ private[spark] class Executor(
         val num = System.currentTimeMillis() % 10 * 10 + System.currentTimeMillis() % 10
         if(num < errorRate * 100) {
           killTask(taskDescription.taskId, true, "riffle error rate test")
+          // scalastyle:off  println
+          val id = taskDescription.taskId
+          println(s"task$id error since use riffle error test")
         }
         val killReason = reasonIfKilled
         if (killReason.isDefined) {
