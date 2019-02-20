@@ -285,7 +285,8 @@ private[spark] class IndexShuffleBlockResolver(
     // The block is actually going to be a range of a single map output file for this map, so
     // find out the consolidated file, then the offset within that from our index
     val indexFile = getRiffleIndexFile(blockId.shuffleId, blockId.mapId)
-
+    val str = blockId.mapId
+    logInfo("read block = " + str + "****")
     val in = new DataInputStream(new FileInputStream(indexFile))
     try {
       ByteStreams.skipFully(in, blockId.reduceId * 8)
