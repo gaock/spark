@@ -425,7 +425,9 @@ private[spark] class MapOutputTrackerMaster(conf: SparkConf,
     print("/n")
     print("mapStatuses value/n")
     if (mapStatuses.nonEmpty) {
-      for ((k, v) <- mapStatuses) {
+      val  keys = mapStatuses.keys
+      for (k <- keys) {
+        val v = mapStatuses(k)
         if (v.nonEmpty) {
           for (ss <- v) {
             var str = ""
