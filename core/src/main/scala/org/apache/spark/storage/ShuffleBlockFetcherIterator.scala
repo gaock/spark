@@ -271,6 +271,12 @@ final class ShuffleBlockFetcherIterator(
       if (address.executorId == blockManager.blockManagerId.executorId) {
         // Filter out zero-sized blocks
         localBlocks ++= blockInfos.filter(_._2 != 0).map(_._1)
+        print("/n")
+        print("We need read this local blocks-------------<<<<<<<<<<")
+        var str = ""
+        localBlocks.foreach(str += _.name)
+        print(str)
+        print("--------------------------------------<<<<<<<<<<<<<<<")
         numBlocksToFetch += localBlocks.size
       } else {
         val iterator = blockInfos.iterator
@@ -280,6 +286,10 @@ final class ShuffleBlockFetcherIterator(
           val (blockId, size) = iterator.next()
           // Skip empty blocks
           if (size > 0) {
+            print("/n")
+            print("We need read this remote blocks------------->>>>>>>>>")
+            print(blockId.name)
+            print("-------------------------------------->>>>>>>>>>>>>>>")
             curBlocks += ((blockId, size))
             remoteBlocks += blockId
             numBlocksToFetch += 1

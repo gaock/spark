@@ -422,15 +422,19 @@ private[spark] class MapOutputTrackerMaster(conf: SparkConf,
     if (changeEpoch) {
       incrementEpoch()
     }
-    logInfo("/n")
-    logInfo("mapStatuses value/n")
-    for ((k, v) <- mapStatuses) {
-      for (ss <- v) {
-        var str = ""
-        for (vv <- ss.getShuffleBlockIds) {
-          str = str + vv.mapId + " "
+    print("/n")
+    print("mapStatuses value/n")
+    if (mapStatuses.nonEmpty) {
+      for ((k, v) <- mapStatuses) {
+        if (v.nonEmpty) {
+          for (ss <- v) {
+            var str = ""
+            for (vv <- ss.getShuffleBlockIds) {
+              str = str + vv.mapId + " "
+            }
+            print("shuffleId = " + k + "location = " + ss.location + " merge array = " + str + "/n")
+          }
         }
-        logInfo("shuffleId = " + k +"location = " + ss.location + " merge array = " + str + "/n")
       }
     }
     riffleToSingleSet.toArray
