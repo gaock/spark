@@ -65,6 +65,11 @@ private[spark] class IndexShuffleBlockResolver(
     if(index.exists()) index
     else blockManager.diskBlockManager.getFile(ShuffleIndexBlockId(shuffleId, mapId, 0))
   }
+  private def getRiffleWriteIndexFile(shuffleId: Int, mapId: Int): File =
+    blockManager.diskBlockManager.getFile(ShuffleIndexBlockId(shuffleId, mapId, 100))
+  def getRiffleWriteDataFile(shuffleId: Int, mapId: Int): File =
+    blockManager.diskBlockManager.getFile(ShuffleDataBlockId(shuffleId, mapId, 100))
+
   def getRiffleDataFile(shuffleId: Int, mapId: Int): File = {
     val data = blockManager.diskBlockManager.getFile(ShuffleDataBlockId(shuffleId, mapId, 100))
     if(data.exists()) data
@@ -209,7 +214,7 @@ private[spark] class IndexShuffleBlockResolver(
      mapId: Int,
      lengths: Array[Long],
      dataTmp: File): Unit = {
-    val indexFile = getRiffleIndexFile(shuffleId, mapId)
+    val indexFile = getRiffleWriteIndexFile(shuffleId, mapId)
     val indexTmp = Utils.tempFileWith(indexFile)
     try {
       val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(indexTmp)))
@@ -225,7 +230,7 @@ private[spark] class IndexShuffleBlockResolver(
         out.close()
       }
 
-      val dataFile = getRiffleDataFile(shuffleId, mapId)
+      val dataFile = getRiffleWriteDataFile(shuffleId, mapId)
       // There is only one IndexShuffleBlockResolver per executor, this synchronization make sure
       // the following check and rename are atomic.
       synchronized {

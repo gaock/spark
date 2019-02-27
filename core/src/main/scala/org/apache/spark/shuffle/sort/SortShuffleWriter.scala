@@ -94,6 +94,17 @@ private[spark] class SortShuffleWriter[K, V, C](
       partitionLengths = sorter.writePartitionedFile(blockId, tmp)
       shuffleBlockResolver.writeIndexFileAndCommit(dep.shuffleId, mapId, partitionLengths, tmp)
       mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths)
+      // insert this block info to block manager tasks infos
+      var flag = true
+      while (flag) {
+        if (blockManager.status) {
+          blockManager.occupy
+          blockManager.insertTaskResultInfo(
+            ShuffleBlockId(dep.shuffleId, mapId, IndexShuffleBlockResolver.NOOP_REDUCE_ID))
+          blockManager.release
+          flag = false
+        }
+      }
     } finally {
       if (tmp.exists() && !tmp.delete()) {
         logError(s"Error while deleting temp file ${tmp.getAbsolutePath}")
@@ -134,6 +145,17 @@ private[spark] class SortShuffleWriter[K, V, C](
           rifflePartitionLengths, tmp)
         mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths,
           rifflePartitionLengths, res._2.toArray)
+
+        // test print info
+        // scalastyle:off println println(...) // scalastyle:on
+        println("mapId = " + mapId)
+        println("parititio length = ************")
+        partitionLengths.foreach(println)
+        println("riffle partition length = *******")
+        rifflePartitionLengths.foreach(println)
+        println("merge blocks = ")
+        res._2.map(_.name).foreach(println)
+
         memoryManager.freeMemory(acquireMemory)
       } else {
         logInfo(s"waiting threshold files***taskId=$mapId")
@@ -319,8 +341,9 @@ private[spark] class SortShuffleWriter[K, V, C](
               val value = segmentStatuses((id, i))._2
               if (value.length != 0) {
                 writer.write(value, 0, value.length)
-//                print("\n****write**** id = " +id.name +
-//                  " segment = " + i + " length = " + value.length)
+                // scalastyle:off println println(...) // scalastyle:on
+                println("\n****write**** id = " +id.name +
+                  " segment = " + i + " length = " + value.length)
               }
               segmentStatuses.remove((id, i))
               rifflePartitionLengths(i) += value.length
@@ -345,19 +368,12 @@ private[spark] class SortShuffleWriter[K, V, C](
 
   /** Close this writer, passing along whether the map completed */
   override def stop(success: Boolean): Option[MapStatus] = {
-    // scalastyle:off
-    println("write 结束")
-    // off
     try {
       if (stopping) {
         return None
       }
       stopping = true
       if (success) {
-        if (mergeBlocksLengths == 0 ) {
-          blockManager.insertTaskResultInfo(
-            ShuffleBlockId(dep.shuffleId, mapId, IndexShuffleBlockResolver.NOOP_REDUCE_ID))
-        }
         Option(mapStatus)
       } else {
         None

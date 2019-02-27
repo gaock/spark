@@ -316,6 +316,9 @@ final class ShuffleBlockFetcherIterator(
     val iter = localBlocks.iterator
     while (iter.hasNext) {
       val blockId = iter.next()
+      // test code
+      // scalastyle:off println println(...) // scalastyle:on
+      println("read block name = " + blockId.name)
       try {
         val buf = blockManager.getBlockData(blockId)
         shuffleMetrics.incLocalBlocksFetched(1)
