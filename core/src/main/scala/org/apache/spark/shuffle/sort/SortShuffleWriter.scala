@@ -182,8 +182,7 @@ private[spark] class SortShuffleWriter[K, V, C](
           // check if blocks number > N (N-merge-way) or
           // this task is the last task at this stage.
           // May error.
-          if (blockInfos.length >= riffleThreshold ||
-            blockInfos.length == dep.partitioner.numPartitions - 1) {
+          if (blockInfos.length >= riffleThreshold) {
             blockManager.deleteTaskResultInfo()
             blockManager.release
             mergeBlocksLengths = blockInfos.length
