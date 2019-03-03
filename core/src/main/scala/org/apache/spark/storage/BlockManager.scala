@@ -137,6 +137,11 @@ private[spark] class BlockManager(
   def deleteTaskResultInfo() : Unit = this.taskResultInfo = Set[ShuffleBlockId]()
   def insertTaskResultInfo(shuffleBlockId: ShuffleBlockId): Unit = {
     taskResultInfo += shuffleBlockId
+    // test
+    // scalastyle:off println println(...) // scalastyle:on
+    println("insert task = " + shuffleBlockId.name)
+    getTaskResultInfos().map(_.name).foreach(println)
+    println("end**********")
   }
 
   // Visible for testing

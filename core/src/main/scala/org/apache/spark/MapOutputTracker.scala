@@ -422,6 +422,32 @@ private[spark] class MapOutputTrackerMaster(conf: SparkConf,
     if (changeEpoch) {
       incrementEpoch()
     }
+    // test
+    // scalastyle:off println println(...) // scalastyle:on
+    if (mapStatuses.isEmpty) {
+      println("mapStatuses is empty")
+    } else {
+      for (info <- mapStatuses) {
+        println("Shuffle Id = " + info._1)
+        if(info._2.isEmpty) {
+          println("Array(MapStatus) is empty")
+        } else {
+          for (mapStatus <- info._2) {
+            println("get shuffle blockids")
+            println("location = " + mapStatus.location)
+            if(mapStatus.getShuffleBlockIds == null) {
+              println("getShuffleBlocks = null")
+            } else {
+              mapStatus.getShuffleBlockIds.map(_.name).foreach(println)
+            }
+            for(i <- Range(0, 3)) {
+              println(mapStatus.getSizeForBlock(i) + "   " + i)
+              println(mapStatus.getSizeForRiffleBlock(i) + "   " + i)
+            }
+          }
+        }
+      }
+    }
     riffleToSingleSet.toArray
   }
 
