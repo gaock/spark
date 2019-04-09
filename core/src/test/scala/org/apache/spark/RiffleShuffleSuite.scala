@@ -47,7 +47,13 @@ class RiffleShuffleSuite extends SparkFunSuite with LocalSparkContext {
   test("use riffle") {
 //    val random = Random
 //    random.nextInt()
-    val res = sc.parallelize(1 to 1600000, 200).map(key => (key % 1600, 1)).reduceByKey(_ + _).collect()
+    val res = sc.parallelize(1 to 1600000, 200).map(key => (key % 1600, 1)).combineByKey(
+  (a: Int) => a,
+  (a: Int, _ : Int) => a,
+  (a: Int, _ : Int) => a,
+  new HashPartitioner(200),
+  mapSideCombine = false
+).collect()
     // scalastyle:off  println
     println(res.length)
   }
