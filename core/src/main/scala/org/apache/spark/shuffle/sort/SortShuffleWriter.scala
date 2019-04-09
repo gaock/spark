@@ -122,7 +122,8 @@ private[spark] class SortShuffleWriter[K, V, C](
       if (res._1) {
         val memoryManager = new RiffleMemoryManager
           [(ShuffleBlockId, Int), (Boolean, Array[Byte])](context)
-        val acquireMemory = memoryManager.acquireMemory(50*1024*1024)
+        val riffleTmpMemory = conf.getInt("spark.conf.riffleTmpMemory", riffleThreshold*readSize*10)
+        val acquireMemory = memoryManager.acquireMemory(riffleTmpMemory)
         logInfo(s"We'll start merge files****taskId=$mapId")
         getRiffleInfo(res._2)
         //  Use only one writer to write this riffle file
