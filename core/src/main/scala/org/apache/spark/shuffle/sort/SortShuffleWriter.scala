@@ -95,16 +95,8 @@ private[spark] class SortShuffleWriter[K, V, C](
       shuffleBlockResolver.writeIndexFileAndCommit(dep.shuffleId, mapId, partitionLengths, tmp)
       mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths)
       // insert this block info to block manager tasks infos
-      var flag = true
-      while (flag) {
-        if (blockManager.status) {
-          blockManager.occupy
-          blockManager.insertTaskResultInfo(
+      blockManager.insertTaskResultInfo(
             ShuffleBlockId(dep.shuffleId, mapId, IndexShuffleBlockResolver.NOOP_REDUCE_ID))
-          blockManager.release
-          flag = false
-        }
-      }
     } finally {
       if (tmp.exists() && !tmp.delete()) {
         logError(s"Error while deleting temp file ${tmp.getAbsolutePath}")
@@ -123,6 +115,10 @@ private[spark] class SortShuffleWriter[K, V, C](
 //      // test
       rifflePartitionLengths(numPartitions - 1) = -1
       val res = isRiffleMerge()
+      // scalastyle:off println println(...) // scalastyle:on
+      println("***************************")
+      if(res._1) res._2.foreach(println)
+      println("***************************")
       if (res._1) {
         val memoryManager = new RiffleMemoryManager
           [(ShuffleBlockId, Int), (Boolean, Array[Byte])](context)
@@ -149,10 +145,10 @@ private[spark] class SortShuffleWriter[K, V, C](
         // test print info
         // scalastyle:off println println(...) // scalastyle:on
         println("mapId = " + mapId)
-        println("parititio length = ************")
-        partitionLengths.foreach(println)
-        println("riffle partition length = *******")
-        rifflePartitionLengths.foreach(println)
+//        println("parititio length = ************")
+//        partitionLengths.foreach(println)
+//        println("riffle partition length = *******")
+//        rifflePartitionLengths.foreach(println)
         println("merge blocks = ")
         res._2.map(_.name).foreach(println)
 
@@ -174,25 +170,14 @@ private[spark] class SortShuffleWriter[K, V, C](
   }
 // success
   def isRiffleMerge(): (Boolean, Seq[ShuffleBlockId]) = {
-    while (true) {
-      if (blockManager.status) {
-        synchronized {
-          blockManager.occupy
-          val blockInfos = blockManager.getTaskResultInfos()
-          // check if blocks number > N (N-merge-way) or
-          // this task is the last task at this stage.
-          // May error.
-          if (blockInfos.length >= riffleThreshold) {
-            blockManager.deleteTaskResultInfo()
-            blockManager.release
-            mergeBlocksLengths = blockInfos.length
-            return (true, blockInfos)
-          } else {
-            blockManager.release
-            return (false, null.asInstanceOf[Seq[ShuffleBlockId]])
-          }
-        }
-      }
+    val blockInfos = blockManager.getTaskResultInfos()
+    // check if blocks number > N (N-merge-way) or
+    // this task is the last task at this stage.
+    // May error.
+    if (blockInfos.length >= riffleThreshold) {
+      return (true, blockInfos)
+    } else {
+      return (false, null.asInstanceOf[Seq[ShuffleBlockId]])
     }
     // It will never arrive this code
     (false, null.asInstanceOf[Seq[ShuffleBlockId]])
@@ -280,6 +265,10 @@ private[spark] class SortShuffleWriter[K, V, C](
           endSegmentId = i - 1
         }
       }
+      println("------------------------------------")
+      println("startSegment = " + startSegmentId)
+      println("endSegment = " + endSegmentId)
+      println("------------------------------------")
       if (startSegmentId == endSegmentId) {
         val segmentByte = result.slice(0, (end - start).intValue)
         if (startSegmentFlag) {
@@ -303,7 +292,11 @@ private[spark] class SortShuffleWriter[K, V, C](
             if (newByte.length == index(segment + 1) - index(segment)) {
               segmentStatuses.update((id, segment), (true, newByte))
             } else {
-              print("\nMay error\n")
+              println("May error")
+              println("id = " + id.name)
+              println("segment = " + segment)
+              println(newByte.length)
+              println(index(segment + 1) - index(segment))
               segmentStatuses.update((id, segment), (false, newByte))
             }
           }
@@ -334,15 +327,15 @@ private[spark] class SortShuffleWriter[K, V, C](
         if (flag) writeInfo(segment) += 1
       }
       for (i <- writeInfo.indices) {
-        if (writeInfo(i) == mergeBlocksLengths) {
+        if (writeInfo(i) == shuffleBlockIds.length) {
           for (id <- shuffleBlockIds) {
             if (segmentStatuses.contains((id, i))) {
               val value = segmentStatuses((id, i))._2
               if (value.length != 0) {
                 writer.write(value, 0, value.length)
                 // scalastyle:off println println(...) // scalastyle:on
-                println("\n****write**** id = " +id.name +
-                  " segment = " + i + " length = " + value.length)
+//                println("\n****write**** id = " +id.name +
+//                  " segment = " + i + " length = " + value.length)
               }
               segmentStatuses.remove((id, i))
               rifflePartitionLengths(i) += value.length

@@ -130,18 +130,19 @@ private[spark] class BlockManager(
       !externalShuffleServiceEnabled || executorId == SparkContext.DRIVER_IDENTIFIER
     new DiskBlockManager(conf, deleteFilesOnStop)
   }
+  private val riffleThreshold = conf.getInt("spark.conf.riffleThreshold", 40)
   private var taskResultInfo: Set[ShuffleBlockId] = Set[ShuffleBlockId]()
 
   def getTaskResultInfos() : Seq[ShuffleBlockId]
-  = this.taskResultInfo.toSeq
-  def deleteTaskResultInfo() : Unit = this.taskResultInfo = Set[ShuffleBlockId]()
+  = taskResultInfo.synchronized{
+    val infos = this.taskResultInfo.toSeq
+    if(infos.length >= riffleThreshold) this.taskResultInfo = Set[ShuffleBlockId]()
+    infos
+  }
   def insertTaskResultInfo(shuffleBlockId: ShuffleBlockId): Unit = {
-    taskResultInfo += shuffleBlockId
-    // test
-    // scalastyle:off println println(...) // scalastyle:on
-    println("insert task = " + shuffleBlockId.name)
-    getTaskResultInfos().map(_.name).foreach(println)
-    println("end**********")
+    taskResultInfo.synchronized{
+      taskResultInfo += shuffleBlockId
+    }
   }
 
   // Visible for testing
@@ -427,10 +428,6 @@ private[spark] class BlockManager(
   def getRiffleDiskBlocks : Seq[BlockId] = {
     diskBlockManager.getAllBlocks()
   }
-  private var flagSys : Boolean = true
-  def occupy : Unit = flagSys = false
-  def release : Unit = flagSys = true
-  def status : Boolean = flagSys
 
   /**
    * Tell the master about the current storage status of a block. This will send a block update

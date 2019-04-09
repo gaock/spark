@@ -427,12 +427,17 @@ private[spark] class MapOutputTrackerMaster(conf: SparkConf,
     if (mapStatuses.isEmpty) {
       println("mapStatuses is empty")
     } else {
+      println("************************************************************")
       for (info <- mapStatuses) {
         println("Shuffle Id = " + info._1)
         if(info._2.isEmpty) {
           println("Array(MapStatus) is empty")
         } else {
+          var temp = 0
           for (mapStatus <- info._2) {
+            println("************************************************************")
+            println("map id = " + temp)
+            temp += 1
             println("get shuffle blockids")
             println("location = " + mapStatus.location)
             if(mapStatus.getShuffleBlockIds == null) {
