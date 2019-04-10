@@ -47,7 +47,6 @@ private[spark] class SortShuffleWriter[K, V, C](
   // and then call stop() with success = false if they get an exception, we want to make sure
   // we don't try deleting files, etc twice.
   private var stopping = false
-
   private var mapStatus: MapStatus = null
 
   private val writeMetrics = context.taskMetrics().shuffleWriteMetrics
@@ -57,7 +56,6 @@ private[spark] class SortShuffleWriter[K, V, C](
   private var partitionLengths = new Array[Long](numPartitions)
   private val rifflePartitionLengths = new Array[Long](numPartitions)
   private val segmentStatuses = new mutable.HashMap[(ShuffleBlockId, Int), (Boolean, Array[Byte])]()
-  private var mergeBlocksLengths = 0
   private val conf = SparkEnv.get.conf
   private val isUseRiffle = conf.getBoolean("spark.conf.isUseRiffle", false)
   private val readSize = conf.getInt("spark.conf.readSize", 1024*1024*1)
@@ -116,9 +114,9 @@ private[spark] class SortShuffleWriter[K, V, C](
       rifflePartitionLengths(numPartitions - 1) = -1
       val res = isRiffleMerge()
       // scalastyle:off println println(...) // scalastyle:on
-      println("***************************")
-      if(res._1) res._2.foreach(println)
-      println("***************************")
+//      println("***************************")
+//      if(res._1) res._2.foreach(println)
+//      println("***************************")
       if (res._1) {
         val memoryManager = new RiffleMemoryManager
           [(ShuffleBlockId, Int), (Boolean, Array[Byte])](context)
@@ -132,10 +130,13 @@ private[spark] class SortShuffleWriter[K, V, C](
         val output = shuffleBlockResolver.getRiffleDataFile(dep.shuffleId, mapId)
         val tmp = Utils.tempFileWith(output)
         val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(tmp)))
-        while (rifflePartitionLengths.last == -1) {
+        val debugTimes = conf.getInt("spark.conf.debugTimes", 100000)
+        var i = 0
+        while (rifflePartitionLengths.last == -1 && i < debugTimes) {
           readBlock()
           mergeRiffleBlocks()
           writeToDisk(out, res._2)
+          i += 1
         }
         out.close()
         shuffleBlockResolver.writeRiffleIndexFileAndCommit(dep.shuffleId, mapId,
@@ -266,10 +267,10 @@ private[spark] class SortShuffleWriter[K, V, C](
           endSegmentId = i - 1
         }
       }
-      println("------------------------------------")
-      println("startSegment = " + startSegmentId)
-      println("endSegment = " + endSegmentId)
-      println("------------------------------------")
+//      println("------------------------------------")
+//      println("startSegment = " + startSegmentId)
+//      println("endSegment = " + endSegmentId)
+//      println("------------------------------------")
       if (startSegmentId == endSegmentId) {
         val segmentByte = result.slice(0, (end - start).intValue)
         if (startSegmentFlag) {
